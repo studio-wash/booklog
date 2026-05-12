@@ -1,0 +1,4 @@
+| ID | slug | 요약 | 생성일 |
+|----|------|------|--------|
+| PLAN-000001 | haruhanjang-mvp | Flutter 독서 잔디 MVP (앱명 booklog, com.studiowash.booklog) | 2026-05-12 |
+| PLAN-000002 | main-current-reading | 메인 잔디 아래 마지막 기록 책·누적 페이지 카드 | 2026-05-12 |

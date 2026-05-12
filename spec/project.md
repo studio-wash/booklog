@@ -1,0 +1,20 @@
+# booklog — 프로젝트 스펙 (요약)
+
+**클라이언트**: Flutter (Android / iOS) — 코드는 **`flutter/`** 디렉터리에서 관리한다.  
+**번들 ID**: `com.studiowash.booklog`  
+**표시명 (현재)**: `booklog`  
+
+## 목표
+
+독서 기록을 **페이지 중심**으로 남기고, **월 단위 잔디**로 읽은 양을 시각화한다. MVP는 단색 잔디 + 월 내 상대적 진하기. 감상은 선택 입력.
+
+## 피처 맵
+
+| 피처 | 문서 |
+|------|------|
+| MVP (잔디·기록·서재·완독) | `spec/features/booklog-mvp/booklog-mvp.md` |
+
+## 플랜 연동
+
+- **PLAN-000001**: `plan/PLAN-000001_haruhanjang-mvp/plan.md`
+- **PLAN-000002**: `plan/PLAN-000002_main-current-reading/plan.md` — 메인 현재 읽기 카드
