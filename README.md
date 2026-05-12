@@ -4,7 +4,7 @@
 
 | 경로 | 내용 |
 |------|------|
-| `flutter/` | Flutter 프로젝트 (`pubspec.yaml`, `lib/`, `android/`, `ios/`) |
+| `api-server/` | Vercel 배포용 **Next.js API** (예: `/api/health`, 이후 네이버 검색 프록시) |
 | `plan/` | 플랜 문서 |
 | `spec/` | 스펙 |
 | `tracking/` | PLAN_INDEX 등 |

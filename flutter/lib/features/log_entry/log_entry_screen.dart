@@ -20,7 +20,7 @@ class LogEntryScreen extends ConsumerStatefulWidget {
 
 class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
   int? _bookId;
-  final _pagesCtrl = TextEditingController();
+  final _lastPageCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   bool _showNote = false;
   DateTime _day = DateTime.now();
@@ -40,7 +40,7 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
 
   @override
   void dispose() {
-    _pagesCtrl.dispose();
+    _lastPageCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -53,24 +53,76 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
       ).showSnackBar(const SnackBar(content: Text('Choose a book')));
       return;
     }
-    final pages = int.tryParse(_pagesCtrl.text.trim());
-    if (pages == null || pages <= 0) {
+    final lastPage = int.tryParse(_lastPageCtrl.text.trim());
+    if (lastPage == null || lastPage < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter pages read (positive number)')),
+        const SnackBar(
+          content: Text('Enter the last page you read (whole number ≥ 1)'),
+        ),
       );
       return;
     }
     final db = ref.read(databaseProvider);
-    final before = await db.totalPagesReadForBook(bid);
-    final books = await db.allBooks();
-    final book = books.firstWhere((b) => b.id == bid);
-    await db.insertEntry(
+    final at = DateTime.now();
+    final bounds = await db.lastPageBoundsForNewEntry(
       bookId: bid,
       calendarDate: _day,
-      pages: pages,
-      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      atTime: at,
     );
-    final after = await db.totalPagesReadForBook(bid);
+    if (lastPage < bounds.lowerBound) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'For this date, last page must be at least ${bounds.lowerBound} '
+            '(logs before this point on the timeline).',
+          ),
+        ),
+      );
+      return;
+    }
+    final ub = bounds.upperBound;
+    if (ub != null && lastPage > ub) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'For this date, last page must be at most $ub '
+            '(a later log for this book already reached that page).',
+          ),
+        ),
+      );
+      return;
+    }
+    final books = await db.allBooks();
+    final book = books.firstWhere((b) => b.id == bid);
+    final cap = book.totalPages;
+    if (cap != null && cap > 0 && lastPage > cap) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('That exceeds this book’s length ($cap pages).'),
+        ),
+      );
+      return;
+    }
+    final before = await db.maxLastPageReadForBook(bid);
+    try {
+      await db.insertEntry(
+        bookId: bid,
+        calendarDate: _day,
+        lastPageRead: lastPage,
+        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        createdAt: at,
+      );
+    } on ArgumentError catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message ?? '$e')));
+      return;
+    }
+    final after = await db.maxLastPageReadForBook(bid);
     ref.read(readingDataTickProvider.notifier).state++;
     if (!context.mounted) return;
     ScaffoldMessenger.of(
@@ -112,7 +164,7 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
                 style: Theme.of(ctx).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Text('Total logged: $totalRead pages'),
+              Text('You reached page $totalRead'),
               const SizedBox(height: 12),
               TextField(
                 controller: reviewCtrl,
@@ -240,10 +292,13 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: _pagesCtrl,
+                controller: _lastPageCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Pages read',
-                  hintText: 'Required',
+                  labelText: 'Last page you read',
+                  hintText: 'e.g. 42',
+                  helperText:
+                      'Page you stopped on. For a past day, it must fit between '
+                      'earlier and later logs for this book on the timeline.',
                 ),
                 keyboardType: TextInputType.number,
               ),

@@ -23,7 +23,7 @@ final booksProvider = FutureProvider.autoDispose<List<Book>>((ref) async {
 });
 
 /// Map of calendar day (date-only) -> total pages that day in [selectedMonthProvider].
-/// Used by the month calendar sheet (not the main 365-day strip).
+/// Used by the month calendar sheet (not the main 12-month strip).
 final dayPageTotalsForSelectedMonthProvider =
     FutureProvider.autoDispose<Map<DateTime, int>>((ref) async {
       ref.watch(readingDataTickProvider);
@@ -42,15 +42,29 @@ final dayPageTotalsForSelectedMonthProvider =
       return map;
     });
 
-/// Last **365** local calendar days ending today (inclusive): day -> total pages.
-/// Main grass strip; intensity max is the max within this window.
-final dayPageTotalsRolling365Provider =
+/// First local calendar day of the month **11 months before** [today]’s month
+/// (inclusive 12 calendar months through [today]).
+DateTime mainGrassWindowStart(DateTime today) {
+  final y = today.year;
+  final m = today.month;
+  var startM = m - 11;
+  var startY = y;
+  while (startM < 1) {
+    startM += 12;
+    startY -= 1;
+  }
+  return DateTime(startY, startM, 1);
+}
+
+/// Main grass strip: **12 calendar months** ending today — day → total `pages`.
+/// Intensity max is the max day total within this window.
+final dayPageTotalsRolling12MonthsProvider =
     FutureProvider.autoDispose<Map<DateTime, int>>((ref) async {
       ref.watch(readingDataTickProvider);
       final db = ref.watch(databaseProvider);
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final start = today.subtract(const Duration(days: 364));
+      final start = mainGrassWindowStart(today);
       final entries = await db.entriesBetween(start, today);
       final map = <DateTime, int>{};
       for (final e in entries) {
@@ -70,3 +84,34 @@ final booksMapProvider = FutureProvider.autoDispose<Map<int, Book>>((
   final books = await ref.watch(booksProvider.future);
   return {for (final b in books) b.id: b};
 });
+
+/// Spec FR-10 — book tied to the latest `reading_entries.created_at`, with
+/// last reached page for that book and the last log’s calendar date.
+class CurrentReadingSnapshot {
+  const CurrentReadingSnapshot({
+    required this.book,
+    required this.lastPageReached,
+    required this.lastLogCalendarDate,
+  });
+
+  final Book book;
+  final int lastPageReached;
+  final DateTime lastLogCalendarDate;
+}
+
+/// Null when there are no reading entries (or book row missing).
+final currentReadingProvider =
+    FutureProvider.autoDispose<CurrentReadingSnapshot?>((ref) async {
+      ref.watch(readingDataTickProvider);
+      final db = ref.watch(databaseProvider);
+      final latest = await db.latestReadingEntry();
+      if (latest == null) return null;
+      final book = await db.bookById(latest.bookId);
+      if (book == null) return null;
+      final lastPage = await db.maxLastPageReadForBook(book.id);
+      return CurrentReadingSnapshot(
+        book: book,
+        lastPageReached: lastPage,
+        lastLogCalendarDate: latest.calendarDate,
+      );
+    });

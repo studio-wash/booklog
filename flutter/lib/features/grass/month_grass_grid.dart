@@ -3,6 +3,39 @@ import 'package:flutter/material.dart';
 import '../reading/domain/grass_github_palette.dart';
 import '../reading/domain/grass_intensity.dart';
 
+const _monthAbbr = [
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
+];
+
+/// Month label for the week column that contains the **1st** of a month in
+/// `[windowStart, windowEnd]`, else empty (GitHub-style strip).
+String monthAbbrevForGrassWeek(
+  List<DateTime> week,
+  DateTime windowStart,
+  DateTime windowEnd,
+) {
+  final ws = DateTime(windowStart.year, windowStart.month, windowStart.day);
+  final we = DateTime(windowEnd.year, windowEnd.month, windowEnd.day);
+  for (final day in week) {
+    final d = DateTime(day.year, day.month, day.day);
+    if (d.day == 1 && !d.isBefore(ws) && !d.isAfter(we)) {
+      return _monthAbbr[d.month - 1];
+    }
+  }
+  return '';
+}
+
 /// Sunday-first padded day list for the month (full weeks only).
 List<DateTime> flatMonthCellsSundayFirst(DateTime month) {
   final y = month.year;
@@ -71,6 +104,7 @@ class GithubContributionStrip extends StatefulWidget {
   /// Square day cell (logical px); larger = easier tap + read at a glance.
   static const double _cell = 22;
   static const double _gap = 3;
+  static const double _labelRowH = 16;
 
   @override
   State<GithubContributionStrip> createState() =>
@@ -126,6 +160,8 @@ class _GithubContributionStripState extends State<GithubContributionStrip> {
     final colW = GithubContributionStrip._cell + GithubContributionStrip._gap;
     final gridH =
         7 * GithubContributionStrip._cell + 6 * GithubContributionStrip._gap;
+    final labelH = GithubContributionStrip._labelRowH;
+    final stripH = labelH + gridH;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -134,58 +170,108 @@ class _GithubContributionStripState extends State<GithubContributionStrip> {
         children: [
           SizedBox(
             width: 28,
-            height: gridH,
+            height: stripH,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var r = 0; r < 7; r++)
-                  SizedBox(
-                    height: GithubContributionStrip._cell,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        rowLabels[r],
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
+                SizedBox(height: labelH),
+                SizedBox(
+                  height: gridH,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (var r = 0; r < 7; r++)
+                        SizedBox(
+                          height: GithubContributionStrip._cell,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              rowLabels[r],
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
+                                  ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: SizedBox(
-              height: gridH,
+              height: stripH,
               child: SingleChildScrollView(
                 controller: _scroll,
                 scrollDirection: Axis.horizontal,
-                child: Row(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final week in weeks)
-                      SizedBox(
-                        width: colW,
-                        height: gridH,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            for (final day in week)
-                              _GithubGrassCell(
-                                size: GithubContributionStrip._cell,
-                                day: day,
-                                windowStart: widget.windowStart,
-                                windowEnd: widget.windowEnd,
-                                dayTotals: widget.dayTotals,
-                                windowMaxPages: widget.windowMaxPages,
-                                onTap: () => widget.onDayTap(day),
+                    SizedBox(
+                      height: labelH,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          for (final week in weeks)
+                            SizedBox(
+                              width: colW,
+                              height: labelH,
+                              child: Align(
+                                alignment: Alignment.bottomLeft,
+                                child: Text(
+                                  monthAbbrevForGrassWeek(
+                                    week,
+                                    widget.windowStart,
+                                    widget.windowEnd,
+                                  ),
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.clip,
+                                ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
+                    ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final week in weeks)
+                          SizedBox(
+                            width: colW,
+                            height: gridH,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                for (final day in week)
+                                  _GithubGrassCell(
+                                    size: GithubContributionStrip._cell,
+                                    day: day,
+                                    windowStart: widget.windowStart,
+                                    windowEnd: widget.windowEnd,
+                                    dayTotals: widget.dayTotals,
+                                    windowMaxPages: widget.windowMaxPages,
+                                    onTap: () => widget.onDayTap(day),
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),

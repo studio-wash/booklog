@@ -77,7 +77,7 @@
 - [x] **상태**: 완료
 - **Task ID**: `domain-grass`
 - **한 줄 요약**: 월별 일→합산 페이지 맵 + 상대 농도 + 하한
-- **설명**: `grass_intensity.dart`, `dayPageTotalsRolling365Provider` / `dayPageTotalsForSelectedMonthProvider`, `entriesBetween`.
+- **설명**: `grass_intensity.dart`, `dayPageTotalsRolling12MonthsProvider` / `dayPageTotalsForSelectedMonthProvider`, `entriesBetween`.
 - **의존성**: `persist-layer`
 - **우선순위**: High
 - **예상 시간**: 60분
@@ -98,8 +98,8 @@
 #### Task ui-grass-main
 - [x] **상태**: 완료
 - **Task ID**: `ui-grass-main`
-- **한 줄 요약**: FR-4~6 메인 365일 잔디·캘린더 시트·날짜 탭 바텀시트
-- **설명**: 메인 `GithubContributionStrip`(365일, `entriesBetween`), 상단 캘린더 아이콘 → 월 `MonthGithubContributionStrip` 시트 + 단계 농도 + 일별 시트.
+- **한 줄 요약**: FR-4~6 메인 12개월 잔디·캘린더 시트·날짜 탭 바텀시트
+- **설명**: 메인 `GithubContributionStrip`(12개 달·월 라벨, `entriesBetween`), 상단 캘린더 아이콘 → 월 `MonthGithubContributionStrip` 시트 + 단계 농도 + 일별 시트.
 - **의존성**: `domain-grass`, `router-shell`
 - **우선순위**: High
 - **예상 시간**: 120분
@@ -160,7 +160,7 @@ ui-grass-main, ui-log-entry, ui-finish-book ──> polish-qa
 ## 변경 이력
 
 - 2026-05-12: 잔디 **셀 크기** 확대(`GithubContributionStrip` 13→22 logical px, 간격·요일 열·모서리 비율 조정).
-- 2026-05-12: **메인 잔디 = 최근 365일** 롤링 띠; **월 달력·월 이동**은 AppBar **캘린더 아이콘** 바텀시트로 이동. DB `entriesBetween`, 프로바이더 `dayPageTotalsRolling365Provider` / `dayPageTotalsForSelectedMonthProvider`.
+- 2026-05-12: **메인 잔디 = 최근 12개 달** 롤링 띠 + 스트립 상단 **월 약어**(달 1일이 있는 주 열); **월 달력·월 이동**은 AppBar **캘린더 아이콘** 바텀시트. DB `entriesBetween`, 프로바이더 `dayPageTotalsRolling12MonthsProvider` / `mainGrassWindowStart` / `dayPageTotalsForSelectedMonthProvider`.
 - 2026-05-12: **잔디 레이아웃** — plan `260512_github_like_ref.png` 기준: **Sun-first 세로 행 + 주 단위 가로 열**, **오른쪽=최근 주**, 가로 스크롤 시 왼쪽으로 과거 주 탐색. (`MonthGithubContributionStrip`)
 - 2026-05-12: **UX revise** — GitHub 기여도 그래프 색·격자·Less/More 범례(`grass_github_palette.dart`). 기록 날짜: **오늘 이전만** 선택(`showDatePicker` `lastDate`), 캘린더 시트에서 **해당 일 기록** → `/log?day=YYYY-MM-DD`. (기존 `/log?bookId=` 유지.)
 - 2026-05-12: **`/code PLAN-000001 *` 완료** — 남은 태스크 전부 구현·`flutter analyze` / `flutter test` 통과, `tracking/SPEC_TRACKING.md`·feature·`data` README, spec 코드 매핑 반영. 위젯 테스트: 파일 DB + isolate FFI는 `pump`에서 교착 → `inMemoryDatabasePath` + `databaseFactoryFfiNoIsolate` (`test/flutter_test_config.dart`). 잔디: `TableCalendar` 높이/페이지 루프 방지(`sixWeekMonthsEnforced`, `pageAnimationEnabled: false`, 스와이프 끔).

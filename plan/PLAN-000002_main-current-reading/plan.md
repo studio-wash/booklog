@@ -25,7 +25,7 @@
 
 ### 1. 메인 UI — 현재 읽기 카드
 
-- 위치: `GrassScreen` 본문에서 **365일 잔디 스트립(`Expanded`) 아래**, `FloatingActionButton`과 겹치지 않도록 하단 패딩 유지.
+- 위치: `GrassScreen` 본문에서 **메인 잔디 스트립 아래**, `FloatingActionButton`과 겹치지 않도록 하단 패딩 유지.
 - 형태: `Card` 또는 `Material` + 둥근 모서리, 제목 한 줄(말줄임), 부제에 누적/총·**마지막 기록일**(해당 엔트리의 `calendar_date` 또는 `created_at` 중 사용자에게 의미 있는 쪽을 짧은 날짜 형식으로).
 - 탭: `context.push('/log?bookId=<id>')` 로 기록 화면 진입(이미 라우터 지원).
 - `readingDataTickProvider` 갱신 시 카드도 다시 로드되도록 **Riverpod `FutureProvider`**(또는 기존 패턴과 동일한 `autoDispose`)로 묶는다.

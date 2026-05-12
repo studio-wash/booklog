@@ -1,5 +1,5 @@
 // Spec FR-4 — relative intensity within the current strip window (GitHub-style).
-// Plan: domain-grass — [monthMax] is the max day total in that window (365-day main or month sheet).
+// Plan: domain-grass — [monthMax] is the max day total in that window (main 12-month strip or month sheet).
 
 /// Returns 0 = no reading, 1..4 = light → strong from [dayTotal] / [monthMax].
 int grassIntensityLevel(int dayTotal, int monthMax) {

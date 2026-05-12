@@ -7,6 +7,7 @@ import '../../core/app_branding.dart';
 import '../../providers.dart';
 import '../reading/domain/grass_github_palette.dart';
 import '../reading/domain/grass_intensity.dart';
+import 'current_reading_card.dart';
 import 'month_grass_grid.dart';
 
 Future<void> _openGrassDaySheet(
@@ -40,7 +41,7 @@ Future<void> _openGrassDaySheet(
               return ListTile(
                 title: Text(t),
                 subtitle: Text(
-                  '${e.pages} p${e.note != null && e.note!.isNotEmpty ? ' · ${e.note}' : ''}',
+                  'p. ${e.lastPageRead} (+${e.pages} p)${e.note != null && e.note!.isNotEmpty ? ' · ${e.note}' : ''}',
                 ),
               );
             }),
@@ -144,16 +145,18 @@ Future<void> _openMonthCalendarSheet(
   );
 }
 
-/// Main grass view (Spec FR-4 ~ FR-6). Rolling **365-day** strip; month UI in sheet.
+/// Main grass view (Spec FR-4 ~ FR-6). Rolling **12-month** strip; month UI in sheet.
 class GrassScreen extends ConsumerWidget {
   const GrassScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final totals = ref.watch(dayPageTotalsRolling365Provider);
+    final totals = ref.watch(dayPageTotalsRolling12MonthsProvider);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final windowStart = today.subtract(const Duration(days: 364));
+    final windowStart = mainGrassWindowStart(today);
+    final fabClearance =
+        MediaQuery.paddingOf(context).bottom + kFloatingActionButtonMargin + 56;
 
     return Scaffold(
       appBar: AppBar(
@@ -171,87 +174,93 @@ class GrassScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: totals.when(
-        data: (map) {
-          final maxP = monthMaxPages(map);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text(
-                  'Last 365 days · ${DateFormat.yMMMd().format(windowStart)} – ${DateFormat.yMMMd().format(today)}',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: Row(
-                  children: [
-                    Text(
-                      'Less',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+      body: Padding(
+        padding: EdgeInsets.only(bottom: fabClearance),
+        child: totals.when(
+          data: (map) {
+            final maxP = monthMaxPages(map);
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Text(
+                      'Last 12 months · ${DateFormat.yMMMd().format(windowStart)} – ${DateFormat.yMMMd().format(today)}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    for (var lv = 0; lv <= 4; lv++) ...[
-                      Container(
-                        width: 10,
-                        height: 10,
-                        margin: const EdgeInsets.only(right: 2),
-                        decoration: BoxDecoration(
-                          color: githubGrassCellFill(lv),
-                          borderRadius: BorderRadius.circular(2),
-                          border: Border.all(
-                            color: githubGrassCellBorder,
-                            width: 0.5,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Less',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    Text(
-                      'More',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                        const SizedBox(width: 8),
+                        for (var lv = 0; lv <= 4; lv++) ...[
+                          Container(
+                            width: 10,
+                            height: 10,
+                            margin: const EdgeInsets.only(right: 2),
+                            decoration: BoxDecoration(
+                              color: githubGrassCellFill(lv),
+                              borderRadius: BorderRadius.circular(2),
+                              border: Border.all(
+                                color: githubGrassCellBorder,
+                                width: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        Text(
+                          'More',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: GithubContributionStrip(
-                  key: const ValueKey('rolling365'),
-                  windowStart: windowStart,
-                  windowEnd: today,
-                  dayTotals: map,
-                  windowMaxPages: maxP,
-                  onDayTap: (d) => _openGrassDaySheet(context, ref, d),
-                ),
-              ),
-              if (map.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'No reading logs in the last 365 days. Tap below to add one.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
                   ),
-                ),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+                  GithubContributionStrip(
+                    key: const ValueKey('rolling12m'),
+                    windowStart: windowStart,
+                    windowEnd: today,
+                    dayTotals: map,
+                    windowMaxPages: maxP,
+                    onDayTap: (d) => _openGrassDaySheet(context, ref, d),
+                  ),
+                  const SizedBox(height: 20),
+                  const CurrentReadingCardSection(),
+                ],
+              ),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('$e')),
+        ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/log'),
-        icon: const Icon(Icons.edit_note),
-        label: const Text('Log reading'),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final snap = await ref.read(currentReadingProvider.future);
+          if (!context.mounted) return;
+          if (snap != null) {
+            context.push('/log?bookId=${snap.book.id}');
+          } else {
+            context.push('/log');
+          }
+        },
+        tooltip: 'Log reading',
+        child: const Icon(Icons.add),
       ),
     );
   }
