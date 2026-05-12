@@ -16,7 +16,24 @@ bool get bookSearchEnabled => _apiBaseUrl.trim().isNotEmpty;
 
 String _stripHtmlTags(String s) => s.replaceAll(RegExp(r'<[^>]*>'), '');
 
-/// [titles] from Naver JSON (`items[].title`). When [titles] is empty, [hint] explains why if known.
+/// Parses book search API or Naver error JSON bodies.
+String? _parseSearchErrorHint(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) return null;
+    final naverMsg = decoded['errorMessage'] as String?;
+    final naverCode = decoded['errorCode'] as String?;
+    if (naverMsg != null && naverMsg.trim().isNotEmpty) {
+      if (naverCode != null && naverCode.isNotEmpty) {
+        return '${naverMsg.trim()} (${naverCode.trim()})';
+      }
+      return naverMsg.trim();
+    }
+    final ours = decoded['error'] as String?;
+    if (ours != null && ours.trim().isNotEmpty) return ours.trim();
+  } catch (_) {}
+  return null;
+}
 Future<({List<String> titles, String? hint})> searchBookTitles(String query) async {
   if (!bookSearchEnabled) {
     return (
@@ -35,13 +52,7 @@ Future<({List<String> titles, String? hint})> searchBookTitles(String query) asy
     );
     final res = await http.get(uri);
     if (res.statusCode != 200) {
-      String? err;
-      try {
-        final decoded = jsonDecode(res.body);
-        if (decoded is Map<String, dynamic> && decoded['error'] is String) {
-          err = decoded['error'] as String;
-        }
-      } catch (_) {}
+      final err = _parseSearchErrorHint(res.body);
       return (
         titles: <String>[],
         hint: err ?? 'Search failed (HTTP ${res.statusCode}).',

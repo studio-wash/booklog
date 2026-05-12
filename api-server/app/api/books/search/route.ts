@@ -27,9 +27,9 @@ export function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
-  const clientId = process.env.NAVER_CLIENT_ID;
-  const clientSecret = process.env.NAVER_CLIENT_SECRET;
-  if (!clientId?.trim() || !clientSecret?.trim()) {
+  const clientId = process.env.NAVER_CLIENT_ID?.trim();
+  const clientSecret = process.env.NAVER_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
     return Response.json(
       { error: 'NAVER_CLIENT_ID / NAVER_CLIENT_SECRET not configured' },
       { status: 503, headers: corsHeaders() },
@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
     headers: {
       'X-Naver-Client-Id': clientId,
       'X-Naver-Client-Secret': clientSecret,
+      Accept: 'application/json',
     },
     cache: 'no-store',
   });
