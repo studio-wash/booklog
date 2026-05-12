@@ -28,7 +28,7 @@
 | FR-4 | `flutter/lib/features/grass/grass_screen.dart`, `month_grass_grid.dart` (`GithubContributionStrip` 월 라벨 행 + `MonthGithubContributionStrip`), `grass_intensity.dart`, `grass_github_palette.dart`, `app_database.dart` (`entriesBetween`), `providers.dart` (`dayPageTotalsRolling12MonthsProvider`, `mainGrassWindowStart`, `dayPageTotalsForSelectedMonthProvider`, `selectedMonthProvider`) |
 | FR-5 | `flutter/lib/features/reading/domain/grass_github_palette.dart`, `grass_screen.dart` |
 | FR-6 | `flutter/lib/features/grass/grass_screen.dart` — 날 탭 바텀시트 + 해당 일 기록 버튼 |
-| FR-7 | `flutter/lib/features/books/data/nl_api.dart`, `books_screen.dart` (NL 버튼은 정의/키 있을 때) |
+| FR-7 | `flutter/lib/features/books/data/book_search_api.dart`, `core/api_config.dart` (`API_BASE_URL` / 기본값), `books_screen.dart` |
 | FR-8 | `flutter/lib/features/log_entry/log_entry_screen.dart`, `app_database.dart` (`totalPagesReadForBook`, `completion_note`) |
 | FR-9 | `flutter/lib/core/app_branding.dart`, `flutter/android/.../strings.xml`, `flutter/ios/Runner/Info.plist` |
 | FR-10 | `grass_screen.dart`(잔디 아래 현재 읽기 카드 + **`+` FAB** → 최근 책이 있으면 `/log?bookId=`·없으면 `/log`), `current_reading_card.dart`, `providers.dart` (`currentReadingProvider`, `CurrentReadingSnapshot`), `app_database.dart` (`latestReadingEntry`, `bookById`, `maxLastPageReadForBook`) |

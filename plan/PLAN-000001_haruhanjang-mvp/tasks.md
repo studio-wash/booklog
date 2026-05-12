@@ -16,7 +16,7 @@
 | `ui-books-shelf` | FR-1 서재 UI + 저장소 연동 | ✅ 완료 | High | persist-layer, router-shell | 90분 |
 | `ui-grass-main` | FR-4~6 메인 잔디 캘린더·일 탭 시 목록 | ✅ 완료 | High | domain-grass, router-shell | 120분 |
 | `ui-log-entry` | FR-2~3 기록 화면·저장·반영 | ✅ 완료 | High | ui-books-shelf | 90분 |
-| `nl-search` | FR-7 NL 검색 클라이언트·stub/비활성 | ✅ 완료 | Medium | ui-books-shelf | 60분 |
+| `nl-search` | FR-7 책 검색 클라이언트 (`API_BASE_URL` / `book_search_api.dart`) | ✅ 완료 | Medium | ui-books-shelf | 60분 |
 | `ui-finish-book` | FR-8 완독 감지·축하·선택 한줄 평 | ✅ 완료 | Medium | ui-log-entry | 60분 |
 | `polish-qa` | 빈 상태·`flutter analyze`·`flutter test` | ✅ 완료 | Medium | ui-grass-main, ui-log-entry, ui-finish-book | 60분 |
 
@@ -118,12 +118,12 @@
 #### Task nl-search
 - [x] **상태**: 완료
 - **Task ID**: `nl-search`
-- **한 줄 요약**: FR-7 NL API 검색·stub
-- **설명**: `nl_api.dart`, `dart-define` 시 UI 노출.
+- **한 줄 요약**: FR-7 책 검색 API 클라이언트 (`API_BASE_URL`)
+- **설명**: `book_search_api.dart`, 기본 API origin은 `api_config.dart`; `dart-define=API_BASE_URL=` 로 끄기 가능.
 - **의존성**: `ui-books-shelf`
 - **우선순위**: Medium
 - **예상 시간**: 60분
-- **구현 위치**: `flutter/lib/features/books/data/nl_api.dart`
+- **구현 위치**: `flutter/lib/features/books/data/book_search_api.dart`, `flutter/lib/core/api_config.dart`
 
 #### Task ui-finish-book
 - [x] **상태**: 완료
@@ -160,7 +160,8 @@ ui-grass-main, ui-log-entry, ui-finish-book ──> polish-qa
 ## 변경 이력
 
 - 2026-05-12: 잔디 **셀 크기** 확대(`GithubContributionStrip` 13→22 logical px, 간격·요일 열·모서리 비율 조정).
-- 2026-05-12: **메인 잔디 = 최근 12개 달** 롤링 띠 + 스트립 상단 **월 약어**(달 1일이 있는 주 열); **월 달력·월 이동**은 AppBar **캘린더 아이콘** 바텀시트. DB `entriesBetween`, 프로바이더 `dayPageTotalsRolling12MonthsProvider` / `mainGrassWindowStart` / `dayPageTotalsForSelectedMonthProvider`.
+- 2026-05-12: **메인 잔디 = 최근 365일** 롤링 띠; **월 달력·월 이동**은 AppBar **캘린더 아이콘** 바텀시트로 이동. DB `entriesBetween`, 프로바이더 `dayPageTotalsRolling365Provider` / `dayPageTotalsForSelectedMonthProvider`.
+- 2026-05-12 (revise): 메인 잔디 **12개 달** 창 + 스트립 상단 **월 약어**(달 1일이 있는 주 열); 프로바이더 `dayPageTotalsRolling12MonthsProvider` / `mainGrassWindowStart`.
 - 2026-05-12: **잔디 레이아웃** — plan `260512_github_like_ref.png` 기준: **Sun-first 세로 행 + 주 단위 가로 열**, **오른쪽=최근 주**, 가로 스크롤 시 왼쪽으로 과거 주 탐색. (`MonthGithubContributionStrip`)
 - 2026-05-12: **UX revise** — GitHub 기여도 그래프 색·격자·Less/More 범례(`grass_github_palette.dart`). 기록 날짜: **오늘 이전만** 선택(`showDatePicker` `lastDate`), 캘린더 시트에서 **해당 일 기록** → `/log?day=YYYY-MM-DD`. (기존 `/log?bookId=` 유지.)
 - 2026-05-12: **`/code PLAN-000001 *` 완료** — 남은 태스크 전부 구현·`flutter analyze` / `flutter test` 통과, `tracking/SPEC_TRACKING.md`·feature·`data` README, spec 코드 매핑 반영. 위젯 테스트: 파일 DB + isolate FFI는 `pump`에서 교착 → `inMemoryDatabasePath` + `databaseFactoryFfiNoIsolate` (`test/flutter_test_config.dart`). 잔디: `TableCalendar` 높이/페이지 루프 방지(`sixWeekMonthsEnforced`, `pageAnimationEnabled: false`, 스와이프 끔).

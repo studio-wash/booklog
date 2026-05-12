@@ -4,7 +4,8 @@
 
 | 경로 | 내용 |
 |------|------|
-| `api-server/` | Vercel 배포용 **Next.js API** (예: `/api/health`, 이후 네이버 검색 프록시) |
+| `flutter/` | Flutter 프로젝트 (`pubspec.yaml`, `lib/`, `android/`, `ios/`) |
+| `api-server/` | Vercel 배포용 **Next.js API** (`/api/health`, `/api/books/search` — 네이버 책 검색 프록시, `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` 필요) |
 | `plan/` | 플랜 문서 |
 | `spec/` | 스펙 |
 | `tracking/` | PLAN_INDEX 등 |

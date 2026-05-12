@@ -12,6 +12,7 @@
 
 - **브랜딩**: `flutter/lib/core/app_branding.dart` — `appDisplayName` (`--dart-define=APP_DISPLAY_NAME`)
 - **라이트 테마**: `flutter/lib/core/app_theme.dart` — 흰 배경 + 잔디 초록 (플랜 샘플 이미지 톤)
+- **API 기본 origin (FR-7)**: `flutter/lib/core/api_config.dart` — `kApiBaseUrlDefault`; 빌드 시 `--dart-define=API_BASE_URL=...`로 덮어쓰기
 - **Android 라벨**: `flutter/android/app/src/main/res/values/strings.xml` + `AndroidManifest.xml` `android:label`
 - **iOS 표시명**: `flutter/ios/Runner/Info.plist` `CFBundleDisplayName`
 

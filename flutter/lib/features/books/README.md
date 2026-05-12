@@ -11,14 +11,14 @@
 ## 코드 위치
 
 - **Flutter UI**: `flutter/lib/features/books/books_screen.dart`
-- **NL API (FR-7)**: `flutter/lib/features/books/data/nl_api.dart`
+- **책 검색 API (FR-7)**: `flutter/lib/features/books/data/book_search_api.dart`, 기본 origin `flutter/lib/core/api_config.dart`
 
 ## Spec-Code 매핑
 
 | Spec 요구사항 | 코드 파일 | 상태 | 마지막 업데이트 |
 |--------------|-----------|------|----------------|
 | FR-1 책 CRUD | `books_screen.dart`, `AppDatabase` (`lib/data/`) | ✅ | 2026-05-12 |
-| FR-7 국립중앙도서관 검색 | `data/nl_api.dart` — `dart-define` 시 활성 | ✅ | 2026-05-12 |
+| FR-7 외부 책 검색 | `data/book_search_api.dart` — 기본 `API_BASE_URL` 내장, 빈 `dart-define`으로 비활성 가능 | ✅ | 2026-05-12 |
 
 ## 생성/수정 이력
 

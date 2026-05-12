@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
-import 'data/nl_api.dart';
+import 'data/book_search_api.dart';
 
 /// Shelf: list / add / edit / delete books (Spec FR-1).
 class BooksScreen extends ConsumerWidget {
@@ -62,6 +62,7 @@ class BooksScreen extends ConsumerWidget {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (ctx) {
+        String? searchFeedback;
         return Padding(
           padding: EdgeInsets.only(
             left: 16,
@@ -69,63 +70,84 @@ class BooksScreen extends ConsumerWidget {
             top: 8,
             bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('New book', style: Theme.of(ctx).textTheme.titleMedium),
-              TextField(
-                controller: titleCtrl,
-                decoration: const InputDecoration(labelText: 'Title'),
-                autofocus: true,
-              ),
-              TextField(
-                controller: pagesCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Total pages (optional)',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              if (nlSearchEnabled) ...[
-                const SizedBox(height: 8),
-                TextField(
-                  controller: searchCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'NL search (stub)',
+          child: StatefulBuilder(
+            builder: (ctx2, setModalState) {
+              final theme = Theme.of(ctx2);
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                  Text('New book', style: theme.textTheme.titleMedium),
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                    autofocus: true,
                   ),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final hits = await nlSearchTitles(searchCtrl.text);
-                    if (!ctx.mounted) return;
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          hits.isEmpty
-                              ? 'No results (stub parser).'
-                              : 'Found ${hits.length} (not wired)',
+                  TextField(
+                    controller: pagesCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Total pages (optional)',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  if (bookSearchEnabled) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: searchCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Book search (Naver via API)',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final q = searchCtrl.text.trim();
+                        if (q.isEmpty) {
+                          setModalState(() {
+                            searchFeedback =
+                                'Type a title or keyword to search.';
+                          });
+                          return;
+                        }
+                        final r = await searchBookTitles(q);
+                        if (!ctx2.mounted) return;
+                        final msg = r.titles.isNotEmpty
+                            ? 'Found ${r.titles.length}: ${r.titles.take(3).join(' · ')}'
+                            : (r.hint ?? 'No books found for that query.');
+                        setModalState(() {
+                          searchFeedback = msg;
+                        });
+                      },
+                      child: const Text('Search books'),
+                    ),
+                    if (searchFeedback != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        searchFeedback!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    );
-                  },
-                  child: const Text('Search NL API'),
+                    ],
+                  ],
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () async {
+                      final t = titleCtrl.text.trim();
+                      if (t.isEmpty) return;
+                      final tp = int.tryParse(pagesCtrl.text.trim());
+                      await ref
+                          .read(databaseProvider)
+                          .insertBook(title: t, totalPages: tp);
+                      ref.read(readingDataTickProvider.notifier).state++;
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
                 ),
-              ],
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () async {
-                  final t = titleCtrl.text.trim();
-                  if (t.isEmpty) return;
-                  final tp = int.tryParse(pagesCtrl.text.trim());
-                  await ref
-                      .read(databaseProvider)
-                      .insertBook(title: t, totalPages: tp);
-                  ref.read(readingDataTickProvider.notifier).state++;
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-            ],
+              );
+            },
           ),
         );
       },
