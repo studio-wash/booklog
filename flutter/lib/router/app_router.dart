@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/app_branding.dart';
 import '../features/books/books_screen.dart';
+import '../features/dev/data_backup_screen.dart';
 import '../features/grass/grass_screen.dart';
 import '../features/log_entry/log_entry_screen.dart';
 
@@ -18,13 +19,17 @@ DateTime? _parseLocalDayQuery(String? value) {
   );
 }
 
-/// Plan: router-shell — `/` grass, `/books`, `/log`.
+/// Plan: router-shell — `/` grass, `/books`, `/log`; PLAN-000004 — `/dev/data` backup.
 GoRouter createAppRouter() {
   return GoRouter(
     initialLocation: '/',
     routes: [
       GoRoute(path: '/', builder: (context, state) => const GrassScreen()),
       GoRoute(path: '/books', builder: (context, state) => const BooksScreen()),
+      GoRoute(
+        path: '/dev/data',
+        builder: (context, state) => const DataBackupScreen(),
+      ),
       GoRoute(
         path: '/log',
         builder: (context, state) {

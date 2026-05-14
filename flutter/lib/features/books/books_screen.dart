@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
@@ -429,7 +430,16 @@ class BooksScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final books = ref.watch(booksProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Books')),
+      appBar: AppBar(
+        title: const Text('Books'),
+        actions: [
+          IconButton(
+            tooltip: 'Backup & restore (dev)',
+            icon: const Icon(Icons.folder_zip_outlined),
+            onPressed: () => context.push('/dev/data'),
+          ),
+        ],
+      ),
       body: books.when(
         data: (list) {
           if (list.isEmpty) {

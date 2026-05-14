@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+
+import 'booklog_export_format.dart';
 
 /// Book row (Spec FR-1).
 ///
@@ -128,6 +132,9 @@ class AppDatabase {
   /// v2: full Naver catalog fields (no price columns). v1 → v2 **drops** books
   /// and reading_entries (no row migration until store release).
   static const int _schemaVersion = 2;
+
+  /// Same as SQLite `userVersion` — used in JSON export (`app_schema_version`).
+  static int get booklogDbSchemaVersion => _schemaVersion;
 
   static Future<AppDatabase> open({String? pathOverride}) async {
     final path =
@@ -477,6 +484,196 @@ WHERE book_id = ? AND (
       [bookId],
     );
     return (r.first['s'] as int?) ?? 0;
+  }
+
+  /// True when there are no books and no reading entries (safe for PLAN-000004 import).
+  Future<bool> isImportSafeEmptyState() async {
+    final b =
+        Sqflite.firstIntValue(await _db.rawQuery('SELECT COUNT(*) FROM books')) ??
+        0;
+    final e =
+        Sqflite.firstIntValue(
+          await _db.rawQuery('SELECT COUNT(*) FROM reading_entries'),
+        ) ??
+        0;
+    return b == 0 && e == 0;
+  }
+
+  /// Raw `books` rows for export (`id ASC`).
+  Future<List<Map<String, Object?>>> allBookRowsOrderedById() async {
+    return _db.query('books', orderBy: 'id ASC');
+  }
+
+  /// Raw `reading_entries` rows for export.
+  Future<List<Map<String, Object?>>> allReadingEntryRowsOrdered() async {
+    return _db.query(
+      'reading_entries',
+      orderBy: 'calendar_date ASC, id ASC',
+    );
+  }
+
+  /// Full DB snapshot as indented JSON (PLAN-000004 / FR-11).
+  Future<String> exportDatabaseAsIndentedJson() async {
+    final books = await allBookRowsOrderedById();
+    final entries = await allReadingEntryRowsOrdered();
+    final payload = <String, Object?>{
+      kExportKeySchemaVersion: booklogExportFormatVersion,
+      kExportKeyAppSchemaVersion: booklogDbSchemaVersion,
+      kExportKeyExportedAt: DateTime.now().toUtc().toIso8601String(),
+      kExportKeyBooks: books,
+      kExportKeyReadingEntries: entries,
+    };
+    return const JsonEncoder.withIndent('  ').convert(payload);
+  }
+
+  /// Restores data from [exportDatabaseAsIndentedJson] output. **Only when DB is empty.**
+  Future<void> importDatabaseFromJson(String json) async {
+    if (!await isImportSafeEmptyState()) {
+      throw const BooklogImportException(
+        'Import only when there are no books and no reading entries.',
+      );
+    }
+    final dynamic decoded = jsonDecode(json);
+    if (decoded is! Map<String, dynamic>) {
+      throw const BooklogImportException('Root JSON must be an object.');
+    }
+    final root = Map<String, dynamic>.from(decoded);
+    final ev = root[kExportKeySchemaVersion];
+    if (ev is! num) {
+      throw const BooklogImportException(
+        'Missing or invalid export_schema_version.',
+      );
+    }
+    final exportVer = ev.toInt();
+    if (exportVer < booklogExportFormatMinSupported ||
+        exportVer > booklogExportFormatMaxSupported) {
+      throw BooklogImportException(
+        'Unsupported export_schema_version: $exportVer '
+        '(supported $booklogExportFormatMinSupported–$booklogExportFormatMaxSupported).',
+      );
+    }
+    final booksRaw = root[kExportKeyBooks];
+    final entriesRaw = root[kExportKeyReadingEntries];
+    if (booksRaw is! List<dynamic> || entriesRaw is! List<dynamic>) {
+      throw const BooklogImportException(
+        'books and reading_entries must be JSON arrays.',
+      );
+    }
+    final bookRows =
+        booksRaw
+            .whereType<Map<String, dynamic>>()
+            .map((e) => Map<String, Object?>.from(e))
+            .toList();
+    final entryRows =
+        entriesRaw
+            .whereType<Map<String, dynamic>>()
+            .map((e) => Map<String, Object?>.from(e))
+            .toList();
+    bookRows.sort((a, b) => _numInt(a['id']).compareTo(_numInt(b['id'])));
+    entryRows.sort((a, b) {
+      final ca = '${a['calendar_date']}';
+      final cb = '${b['calendar_date']}';
+      final c = ca.compareTo(cb);
+      if (c != 0) return c;
+      return _numInt(a['id']).compareTo(_numInt(b['id']));
+    });
+    for (final row in bookRows) {
+      _validateBookExportRow(row);
+    }
+    for (final row in entryRows) {
+      _validateEntryExportRow(row);
+    }
+    final idMap = <int, int>{};
+    await _db.transaction((txn) async {
+      for (final row in bookRows) {
+        final oldId = _numInt(row['id']);
+        final insert = _bookInsertFromExportRow(row);
+        final newId = await txn.insert('books', insert);
+        idMap[oldId] = newId;
+      }
+      for (final row in entryRows) {
+        final oldBookId = _numInt(row['book_id']);
+        final newBookId = idMap[oldBookId];
+        if (newBookId == null) {
+          throw BooklogImportException(
+            'reading_entries references missing book_id: $oldBookId',
+          );
+        }
+        final insert = _entryInsertFromExportRow(row, newBookId);
+        await txn.insert('reading_entries', insert);
+      }
+    });
+    for (final newBookId in idMap.values) {
+      await _reconcileReadingEntryPagesForBook(newBookId);
+    }
+  }
+
+  static int _numInt(Object? v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    throw BooklogImportException('Expected int-compatible value, got $v');
+  }
+
+  static void _validateBookExportRow(Map<String, Object?> row) {
+    final title = row['title'];
+    if (title is! String || title.trim().isEmpty) {
+      throw const BooklogImportException('Each book needs a non-empty title.');
+    }
+    final isbn = row['isbn'];
+    if (isbn is! String || isbn.trim().isEmpty) {
+      throw const BooklogImportException('Each book needs a non-empty isbn.');
+    }
+    if (row['created_at'] == null) {
+      throw const BooklogImportException('Each book needs created_at.');
+    }
+    _numInt(row['created_at']);
+    _numInt(row['id']);
+  }
+
+  static void _validateEntryExportRow(Map<String, Object?> row) {
+    final dk = row['calendar_date'];
+    if (dk is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dk)) {
+      throw const BooklogImportException(
+        'Each reading entry needs calendar_date YYYY-MM-DD.',
+      );
+    }
+    _numInt(row['id']);
+    _numInt(row['book_id']);
+    _numInt(row['pages']);
+    _numInt(row['last_page_read']);
+    _numInt(row['created_at']);
+  }
+
+  static Map<String, Object?> _bookInsertFromExportRow(
+    Map<String, Object?> row,
+  ) {
+    return {
+      'title': row['title']! as String,
+      'isbn': row['isbn']! as String,
+      'image_url': (row['image_url'] as String?) ?? '',
+      'link': row['link'],
+      'author': row['author'],
+      'publisher': row['publisher'],
+      'description': row['description'],
+      'pubdate': row['pubdate'],
+      'total_pages': row['total_pages'],
+      'completion_note': row['completion_note'],
+      'created_at': _numInt(row['created_at']),
+    };
+  }
+
+  static Map<String, Object?> _entryInsertFromExportRow(
+    Map<String, Object?> row,
+    int newBookId,
+  ) {
+    return {
+      'book_id': newBookId,
+      'calendar_date': row['calendar_date']! as String,
+      'pages': _numInt(row['pages']),
+      'last_page_read': _numInt(row['last_page_read']),
+      'note': row['note'],
+      'created_at': _numInt(row['created_at']),
+    };
   }
 
   static String _dateKey(DateTime d) =>

@@ -1,6 +1,6 @@
 # Feature: booklog MVP
 
-**Plan**: PLAN-000001, PLAN-000002 (메인 현재 읽기 카드)  
+**Plan**: PLAN-000001, PLAN-000002 (메인 현재 읽기 카드), PLAN-000004 (개발용 JSON export/import)  
 **구현 루트**: `flutter/lib/` (Flutter 앱은 저장소의 `flutter/` 디렉터리)
 
 ## FR 목록
@@ -17,6 +17,7 @@
 | FR-8 | 책에 총 페이지가 있고 기록으로 **완독**에 도달하면 축하 UI를 띄우고, **한줄 평**은 선택, **그냥 완료** 가능. |
 | FR-9 | 앱 표시명·번들은 **변경 용이 구조**(`app_branding`, Gradle/Xcode 단일 진실, `@string/app_name`)를 따른다. |
 | FR-10 | **메인**에서 **가장 최근에 저장한 읽기 기록**이 있는 책의 제목·**마지막으로 읽은 쪽**(해당 책 `MAX(last_page_read)`)·마지막 기록일(그 기록의 날짜)을 보여준다. 책에 총 페이지가 있으면 **진행 바**를 함께 표시한다. **메인 `+` FAB**으로 기록 화면에 들어가며, 최근 기록 책이 있으면 그 책이 **`/log?bookId=`**로 **미리 선택**된다. 기록이 없으면 안내 문구만 표시한다. |
+| FR-11 | **개발·백업**: 로컬 DB를 **JSON으로 export**하고, **서재·기록이 비어 있을 때만** 동일 포맷 **import**로 복원할 수 있다(스키마 변경 전 백업, 외부 편집·AI 보조용). 포맷 버전(`export_schema_version`) 검증·`book_id` 재매핑 포함. |
 
 ## 구현 코드 매핑 (코드 기준)
 
@@ -32,6 +33,7 @@
 | FR-8 | `flutter/lib/features/log_entry/log_entry_screen.dart`, `app_database.dart` (`totalPagesReadForBook`, `completion_note`) |
 | FR-9 | `flutter/lib/core/app_branding.dart`, `flutter/android/.../strings.xml`, `flutter/ios/Runner/Info.plist` |
 | FR-10 | `grass_screen.dart`(잔디 아래 현재 읽기 카드 + **`+` FAB** → 최근 책이 있으면 `/log?bookId=`·없으면 `/log`), `current_reading_card.dart`, `providers.dart` (`currentReadingProvider`, `CurrentReadingSnapshot`), `app_database.dart` (`latestReadingEntry`, `bookById`, `maxLastPageReadForBook`) |
+| FR-11 | `flutter/lib/data/booklog_export_format.dart`, `flutter/lib/data/app_database.dart` (`exportDatabaseAsIndentedJson`, `importDatabaseFromJson`, `isImportSafeEmptyState`), `flutter/lib/features/dev/data_backup_screen.dart`, `flutter/lib/router/app_router.dart` (`/dev/data`), `flutter/lib/features/books/books_screen.dart` (AppBar 백업), `flutter/test/export_import_roundtrip_test.dart` |
 
 ## 비기능
 
