@@ -17,4 +17,4 @@
 ## 플랜 연동
 
 - **PLAN-000001**: `plan/PLAN-000001_haruhanjang-mvp/plan.md`
-- **PLAN-000002**: `plan/PLAN-000002_main-current-reading/plan.md` — 메인 현재 읽기 카드
+- **PLAN-000003**: `plan/PLAN-000003_add-book-search-first/plan.md` — 새 책 추가 검색 우선 UI

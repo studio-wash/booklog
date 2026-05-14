@@ -4,6 +4,305 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/app_database.dart';
 import '../../providers.dart';
 import 'data/book_search_api.dart';
+import 'data/book_search_hit.dart';
+
+Widget _bookSearchThumbPlaceholder(ThemeData theme) {
+  return ColoredBox(
+    color: theme.colorScheme.surfaceContainerHighest,
+    child: Center(
+      child: Icon(
+        Icons.menu_book_outlined,
+        color: theme.colorScheme.onSurfaceVariant,
+        size: 28,
+      ),
+    ),
+  );
+}
+
+/// New book flow: search-first sheet (PLAN-000003). Controllers live in [State] so
+/// async search cannot run [setState] after [dispose] (e.g. sheet closed or hot restart).
+class _AddBookSheetBody extends ConsumerStatefulWidget {
+  const _AddBookSheetBody();
+
+  @override
+  ConsumerState<_AddBookSheetBody> createState() => _AddBookSheetBodyState();
+}
+
+class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _pagesCtrl;
+  late final TextEditingController _searchCtrl;
+
+  List<BookSearchHit> _hits = [];
+  bool _searching = false;
+  int _selectedIndex = -1;
+  String? _inlineHint;
+  bool _ranSearchAtLeastOnce = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController();
+    _pagesCtrl = TextEditingController();
+    _searchCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _pagesCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch() async {
+    final q = _searchCtrl.text.trim();
+    if (q.isEmpty) {
+      setState(() {
+        _inlineHint = 'Type a title or keyword to search.';
+        _hits = [];
+        _ranSearchAtLeastOnce = true;
+        _selectedIndex = -1;
+      });
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _inlineHint = null;
+    });
+    final r = await searchBookHits(q);
+    if (!mounted) return;
+    setState(() {
+      _searching = false;
+      _ranSearchAtLeastOnce = true;
+      _hits = r.hits;
+      _selectedIndex = -1;
+      _titleCtrl.clear();
+      _inlineHint = r.hint ?? (r.hits.isEmpty ? 'No books found.' : null);
+    });
+  }
+
+  List<Widget> _resultSlivers(ThemeData theme) {
+    if (!bookSearchEnabled) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Search is unavailable. Use manual entry below.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+    if (_searching) {
+      return [
+        const SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ),
+      ];
+    }
+    if (_hits.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                _ranSearchAtLeastOnce
+                    ? (_inlineHint ??
+                        'No results. Try another keyword or manual entry.')
+                    : 'Enter a keyword and tap Search.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) {
+            final h = _hits[i];
+            final sel = _selectedIndex == i;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (i > 0)
+                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                ListTile(
+                  selected: sel,
+                  selectedTileColor: theme.colorScheme.primaryContainer
+                      .withValues(alpha: 0.35),
+                  leading: SizedBox(
+                    width: 48,
+                    height: 56,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: h.imageUrl != null && h.imageUrl!.isNotEmpty
+                          ? Image.network(
+                              h.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _bookSearchThumbPlaceholder(theme),
+                            )
+                          : _bookSearchThumbPlaceholder(theme),
+                    ),
+                  ),
+                  title: Text(
+                    h.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    [
+                      if (h.author != null && h.author!.isNotEmpty) h.author!,
+                      if (h.publisher != null && h.publisher!.isNotEmpty)
+                        h.publisher!,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    setState(() {
+                      _selectedIndex = i;
+                      _titleCtrl.text = h.title;
+                    });
+                  },
+                ),
+              ],
+            );
+          },
+          childCount: _hits.length,
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('New book', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (bookSearchEnabled) ...[
+          TextField(
+            controller: _searchCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Search by title or keyword',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) {
+              if (!_searching) _runSearch();
+            },
+          ),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            icon: const Icon(Icons.search),
+            label: const Text('Search'),
+            onPressed: _searching ? null : _runSearch,
+          ),
+        ] else ...[
+          Text(
+            'Set API_BASE_URL on the server / app to enable search.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Expanded(
+          child: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              ..._resultSlivers(theme),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _pagesCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Total pages (optional)',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 4),
+                      ExpansionTile(
+                        initiallyExpanded: !bookSearchEnabled,
+                        title: const Text('Manual entry'),
+                        children: [
+                          TextField(
+                            controller: _titleCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Title',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: () async {
+                          final t = _titleCtrl.text.trim();
+                          if (t.isEmpty) return;
+                          final tp = int.tryParse(_pagesCtrl.text.trim());
+                          await ref
+                              .read(databaseProvider)
+                              .insertBook(title: t, totalPages: tp);
+                          ref.read(readingDataTickProvider.notifier).state++;
+                          if (!mounted) return;
+                          // Avoid InkWell / MediaQuery lookups on deactivated subtree
+                          // when the route pops (focus highlight mode can still notify).
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            Navigator.of(context).pop();
+                          });
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 /// Shelf: list / add / edit / delete books (Spec FR-1).
 class BooksScreen extends ConsumerWidget {
@@ -54,100 +353,22 @@ class BooksScreen extends ConsumerWidget {
   }
 
   Future<void> _addBook(BuildContext context, WidgetRef ref) async {
-    final titleCtrl = TextEditingController();
-    final pagesCtrl = TextEditingController();
-    final searchCtrl = TextEditingController();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (ctx) {
-        String? searchFeedback;
-        return Padding(
+      builder: (sheetContext) {
+        return AnimatedPadding(
+          duration: Duration.zero,
           padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 8,
-            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: StatefulBuilder(
-            builder: (ctx2, setModalState) {
-              final theme = Theme.of(ctx2);
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                  Text('New book', style: theme.textTheme.titleMedium),
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: const InputDecoration(labelText: 'Title'),
-                    autofocus: true,
-                  ),
-                  TextField(
-                    controller: pagesCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Total pages (optional)',
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  if (bookSearchEnabled) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: searchCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Book search (Naver via API)',
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        final q = searchCtrl.text.trim();
-                        if (q.isEmpty) {
-                          setModalState(() {
-                            searchFeedback =
-                                'Type a title or keyword to search.';
-                          });
-                          return;
-                        }
-                        final r = await searchBookTitles(q);
-                        if (!ctx2.mounted) return;
-                        final msg = r.titles.isNotEmpty
-                            ? 'Found ${r.titles.length}: ${r.titles.take(3).join(' · ')}'
-                            : (r.hint ?? 'No books found for that query.');
-                        setModalState(() {
-                          searchFeedback = msg;
-                        });
-                      },
-                      child: const Text('Search books'),
-                    ),
-                    if (searchFeedback != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        searchFeedback!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () async {
-                      final t = titleCtrl.text.trim();
-                      if (t.isEmpty) return;
-                      final tp = int.tryParse(pagesCtrl.text.trim());
-                      await ref
-                          .read(databaseProvider)
-                          .insertBook(title: t, totalPages: tp);
-                      ref.read(readingDataTickProvider.notifier).state++;
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                    child: const Text('Save'),
-                  ),
-                ],
-                ),
-              );
-            },
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.88,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: const _AddBookSheetBody(),
+            ),
           ),
         );
       },
@@ -211,6 +432,9 @@ class BooksScreen extends ConsumerWidget {
           ),
         );
       },
-    );
+    ).whenComplete(() {
+      titleCtrl.dispose();
+      pagesCtrl.dispose();
+    });
   }
 }

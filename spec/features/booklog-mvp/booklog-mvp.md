@@ -13,7 +13,7 @@
 | FR-4 | **메인 화면** 잔디는 **최근 12개 달**(오늘 포함, 해당 월 1일부터 역산) **GitHub 프로필형 띠**로 보여준다: **열=주**, **행=요일(Sun–Sat)**, **가로 스크롤**(초기는 **오른쪽=최근**). 각 **달 1일이 속한 주** 열 위에 **월 약어**(예: FEB, MAR)를 둔다. 농도는 **해당 12개월 창 안에서의 최대 일 합산 페이지** 대비 상대 비율. **월 단위 달력·월 이동**은 상단 **캘린더 아이콘**으로 연 바텀시트에서 제공한다. |
 | FR-5 | 잔디 **GitHub contribution 그래프와 동일 계열 단색 초록 단계**(책별 색은 MVP 제외). |
 | FR-6 | 날짜를 탭하면 해당 일의 기록 목록(책, 페이지, 감상 요약)을 볼 수 있다. |
-| FR-7 | **국립중앙도서관 검색 API**로 책 검색·선택 시 제목 등을 채울 수 있다(실패 시 수동 입력). 엔드포인트·키는 구현 시 확정. |
+| FR-7 | 외부 **도서 검색**(Naver 검색 API를 `api-server`에서 프록시)으로 책을 검색하고, **새 책 추가** 시 검색 결과(썸네일·제목·저자 등)에서 선택해 제목을 채운다. 검색이 꺼져 있거나 실패·미일치 시 **직접 입력**으로 제목을 넣을 수 있다. |
 | FR-8 | 책에 총 페이지가 있고 기록으로 **완독**에 도달하면 축하 UI를 띄우고, **한줄 평**은 선택, **그냥 완료** 가능. |
 | FR-9 | 앱 표시명·번들은 **변경 용이 구조**(`app_branding`, Gradle/Xcode 단일 진실, `@string/app_name`)를 따른다. |
 | FR-10 | **메인**에서 **가장 최근에 저장한 읽기 기록**이 있는 책의 제목·**마지막으로 읽은 쪽**(해당 책 `MAX(last_page_read)`)·마지막 기록일(그 기록의 날짜)을 보여준다. 책에 총 페이지가 있으면 **진행 바**를 함께 표시한다. **메인 `+` FAB**으로 기록 화면에 들어가며, 최근 기록 책이 있으면 그 책이 **`/log?bookId=`**로 **미리 선택**된다. 기록이 없으면 안내 문구만 표시한다. |
@@ -28,7 +28,7 @@
 | FR-4 | `flutter/lib/features/grass/grass_screen.dart`, `month_grass_grid.dart` (`GithubContributionStrip` 월 라벨 행 + `MonthGithubContributionStrip`), `grass_intensity.dart`, `grass_github_palette.dart`, `app_database.dart` (`entriesBetween`), `providers.dart` (`dayPageTotalsRolling12MonthsProvider`, `mainGrassWindowStart`, `dayPageTotalsForSelectedMonthProvider`, `selectedMonthProvider`) |
 | FR-5 | `flutter/lib/features/reading/domain/grass_github_palette.dart`, `grass_screen.dart` |
 | FR-6 | `flutter/lib/features/grass/grass_screen.dart` — 날 탭 바텀시트 + 해당 일 기록 버튼 |
-| FR-7 | `flutter/lib/features/books/data/book_search_api.dart`, `core/api_config.dart` (`API_BASE_URL` / 기본값), `books_screen.dart` |
+| FR-7 | `flutter/lib/features/books/data/book_search_hit.dart`, `book_search_api.dart` (`searchBookHits`), `core/api_config.dart`, `books_screen.dart` (검색 우선 추가 시트) |
 | FR-8 | `flutter/lib/features/log_entry/log_entry_screen.dart`, `app_database.dart` (`totalPagesReadForBook`, `completion_note`) |
 | FR-9 | `flutter/lib/core/app_branding.dart`, `flutter/android/.../strings.xml`, `flutter/ios/Runner/Info.plist` |
 | FR-10 | `grass_screen.dart`(잔디 아래 현재 읽기 카드 + **`+` FAB** → 최근 책이 있으면 `/log?bookId=`·없으면 `/log`), `current_reading_card.dart`, `providers.dart` (`currentReadingProvider`, `CurrentReadingSnapshot`), `app_database.dart` (`latestReadingEntry`, `bookById`, `maxLastPageReadForBook`) |
