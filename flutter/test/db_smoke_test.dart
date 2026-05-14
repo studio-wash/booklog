@@ -5,6 +5,8 @@ import 'package:path/path.dart' as p;
 
 import 'package:booklog/data/app_database.dart';
 
+String _testIsbn(String tag) => 'TEST-$tag-${DateTime.now().microsecondsSinceEpoch}';
+
 void main() {
   test('AppDatabase entriesForMonth returns', () async {
     final dir = await Directory.systemTemp.createTemp('booklog_db_');
@@ -20,7 +22,11 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('booklog_db_');
     final dbPath = p.join(dir.path, 'booklog.db');
     final db = await AppDatabase.open(pathOverride: dbPath);
-    final b = await db.insertBook(title: 'T');
+    final b = await db.insertBook(
+      title: 'T',
+      isbn: _testIsbn('between'),
+      imageUrl: '',
+    );
     await db.insertEntry(
       bookId: b.id,
       calendarDate: DateTime(2026, 5, 10),
@@ -49,8 +55,18 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('booklog_db_');
     final dbPath = p.join(dir.path, 'booklog.db');
     final db = await AppDatabase.open(pathOverride: dbPath);
-    final b1 = await db.insertBook(title: 'Older', totalPages: 100);
-    final b2 = await db.insertBook(title: 'Newer', totalPages: 100);
+    final b1 = await db.insertBook(
+      title: 'Older',
+      isbn: _testIsbn('old'),
+      imageUrl: '',
+      totalPages: 100,
+    );
+    final b2 = await db.insertBook(
+      title: 'Newer',
+      isbn: _testIsbn('new'),
+      imageUrl: '',
+      totalPages: 100,
+    );
     await db.insertEntry(
       bookId: b1.id,
       calendarDate: DateTime(2026, 1, 1),
@@ -70,42 +86,53 @@ void main() {
     await dir.delete(recursive: true);
   });
 
-  test('backdated last page fits between neighbors; deltas reconciled', () async {
-    final dir = await Directory.systemTemp.createTemp('booklog_db_');
-    final dbPath = p.join(dir.path, 'booklog.db');
-    final db = await AppDatabase.open(pathOverride: dbPath);
-    final b = await db.insertBook(title: 'Timeline');
-    await db.insertEntry(
-      bookId: b.id,
-      calendarDate: DateTime(2026, 5, 20),
-      lastPageRead: 100,
-      createdAt: DateTime(2026, 5, 20, 12),
-    );
-    await db.insertEntry(
-      bookId: b.id,
-      calendarDate: DateTime(2026, 5, 10),
-      lastPageRead: 50,
-      createdAt: DateTime(2026, 5, 21, 12),
-    );
-    final span = await db.entriesBetween(
-      DateTime(2026, 5, 1),
-      DateTime(2026, 5, 31),
-    );
-    expect(span.length, 2);
-    expect(span[0].calendarDate, DateTime(2026, 5, 10));
-    expect(span[0].lastPageRead, 50);
-    expect(span[0].pages, 50);
-    expect(span[1].lastPageRead, 100);
-    expect(span[1].pages, 50);
-    await db.close();
-    await dir.delete(recursive: true);
-  });
+  test(
+    'backdated last page fits between neighbors; deltas reconciled',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('booklog_db_');
+      final dbPath = p.join(dir.path, 'booklog.db');
+      final db = await AppDatabase.open(pathOverride: dbPath);
+      final b = await db.insertBook(
+        title: 'Timeline',
+        isbn: _testIsbn('timeline'),
+        imageUrl: '',
+      );
+      await db.insertEntry(
+        bookId: b.id,
+        calendarDate: DateTime(2026, 5, 20),
+        lastPageRead: 100,
+        createdAt: DateTime(2026, 5, 20, 12),
+      );
+      await db.insertEntry(
+        bookId: b.id,
+        calendarDate: DateTime(2026, 5, 10),
+        lastPageRead: 50,
+        createdAt: DateTime(2026, 5, 21, 12),
+      );
+      final span = await db.entriesBetween(
+        DateTime(2026, 5, 1),
+        DateTime(2026, 5, 31),
+      );
+      expect(span.length, 2);
+      expect(span[0].calendarDate, DateTime(2026, 5, 10));
+      expect(span[0].lastPageRead, 50);
+      expect(span[0].pages, 50);
+      expect(span[1].lastPageRead, 100);
+      expect(span[1].pages, 50);
+      await db.close();
+      await dir.delete(recursive: true);
+    },
+  );
 
   test('insertEntry rejects last page above next log on timeline', () async {
     final dir = await Directory.systemTemp.createTemp('booklog_db_');
     final dbPath = p.join(dir.path, 'booklog.db');
     final db = await AppDatabase.open(pathOverride: dbPath);
-    final b = await db.insertBook(title: 'T');
+    final b = await db.insertBook(
+      title: 'T',
+      isbn: _testIsbn('reject'),
+      imageUrl: '',
+    );
     await db.insertEntry(
       bookId: b.id,
       calendarDate: DateTime(2026, 5, 10),

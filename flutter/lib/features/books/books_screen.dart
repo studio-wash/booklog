@@ -19,6 +19,22 @@ Widget _bookSearchThumbPlaceholder(ThemeData theme) {
   );
 }
 
+Widget _shelfThumb(Book b, ThemeData theme) {
+  if (b.imageUrl.trim().isEmpty) {
+    return _bookSearchThumbPlaceholder(theme);
+  }
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(6),
+    child: Image.network(
+      b.imageUrl,
+      width: 48,
+      height: 56,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _bookSearchThumbPlaceholder(theme),
+    ),
+  );
+}
+
 /// New book flow: search-first sheet (PLAN-000003). Controllers live in [State] so
 /// async search cannot run [setState] after [dispose] (e.g. sheet closed or hot restart).
 class _AddBookSheetBody extends ConsumerStatefulWidget {
@@ -32,12 +48,15 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _pagesCtrl;
   late final TextEditingController _searchCtrl;
+  late final TextEditingController _isbnCtrl;
+  late final TextEditingController _imageUrlCtrl;
 
   List<BookSearchHit> _hits = [];
   bool _searching = false;
   int _selectedIndex = -1;
   String? _inlineHint;
   bool _ranSearchAtLeastOnce = false;
+  bool _suppressSelectionSync = false;
 
   @override
   void initState() {
@@ -45,13 +64,34 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
     _titleCtrl = TextEditingController();
     _pagesCtrl = TextEditingController();
     _searchCtrl = TextEditingController();
+    _isbnCtrl = TextEditingController();
+    _imageUrlCtrl = TextEditingController();
+    _titleCtrl.addListener(_syncSelectionClear);
+    _isbnCtrl.addListener(_syncSelectionClear);
+    _imageUrlCtrl.addListener(_syncSelectionClear);
+  }
+
+  void _syncSelectionClear() {
+    if (_suppressSelectionSync) return;
+    if (_selectedIndex < 0 || _selectedIndex >= _hits.length) return;
+    final h = _hits[_selectedIndex];
+    if (_titleCtrl.text != h.title ||
+        _isbnCtrl.text != h.isbn ||
+        _imageUrlCtrl.text != h.imageUrl) {
+      setState(() => _selectedIndex = -1);
+    }
   }
 
   @override
   void dispose() {
+    _titleCtrl.removeListener(_syncSelectionClear);
+    _isbnCtrl.removeListener(_syncSelectionClear);
+    _imageUrlCtrl.removeListener(_syncSelectionClear);
     _titleCtrl.dispose();
     _pagesCtrl.dispose();
     _searchCtrl.dispose();
+    _isbnCtrl.dispose();
+    _imageUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -77,8 +117,77 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
       _ranSearchAtLeastOnce = true;
       _hits = r.hits;
       _selectedIndex = -1;
+      _suppressSelectionSync = true;
       _titleCtrl.clear();
+      _isbnCtrl.clear();
+      _imageUrlCtrl.clear();
+      _suppressSelectionSync = false;
       _inlineHint = r.hint ?? (r.hits.isEmpty ? 'No books found.' : null);
+    });
+  }
+
+  Future<void> _save() async {
+    final db = ref.read(databaseProvider);
+    final tp = int.tryParse(_pagesCtrl.text.trim());
+
+    late final String title;
+    late final String isbn;
+    late final String imageUrl;
+    String? link;
+    String? author;
+    String? publisher;
+    String? description;
+    String? pubdate;
+
+    if (_selectedIndex >= 0 && _selectedIndex < _hits.length) {
+      final h = _hits[_selectedIndex];
+      title = h.title;
+      isbn = h.isbn;
+      imageUrl = h.imageUrl;
+      link = h.link;
+      author = h.author;
+      publisher = h.publisher;
+      description = h.description;
+      pubdate = h.pubdate;
+    } else {
+      title = _titleCtrl.text.trim();
+      isbn = _isbnCtrl.text.trim();
+      imageUrl = _imageUrlCtrl.text.trim();
+      if (title.isEmpty || isbn.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Title and ISBN are required.')),
+        );
+        return;
+      }
+    }
+
+    final dup = await db.bookByIsbn(isbn);
+    if (dup != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Already in shelf: ${dup.title}')));
+      return;
+    }
+
+    await db.insertBook(
+      title: title,
+      isbn: isbn,
+      imageUrl: imageUrl,
+      link: link,
+      author: author,
+      publisher: publisher,
+      description: description,
+      pubdate: pubdate,
+      totalPages: tp,
+    );
+    ref.read(readingDataTickProvider.notifier).state++;
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
     });
   }
 
@@ -139,60 +248,61 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
     }
     return [
       SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, i) {
-            final h = _hits[i];
-            final sel = _selectedIndex == i;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (i > 0)
-                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                ListTile(
-                  selected: sel,
-                  selectedTileColor: theme.colorScheme.primaryContainer
-                      .withValues(alpha: 0.35),
-                  leading: SizedBox(
-                    width: 48,
-                    height: 56,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: h.imageUrl != null && h.imageUrl!.isNotEmpty
-                          ? Image.network(
-                              h.imageUrl!,
+        delegate: SliverChildBuilderDelegate((context, i) {
+          final h = _hits[i];
+          final sel = _selectedIndex == i;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (i > 0)
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              ListTile(
+                selected: sel,
+                selectedTileColor: theme.colorScheme.primaryContainer
+                    .withValues(alpha: 0.35),
+                leading: SizedBox(
+                  width: 48,
+                  height: 56,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child:
+                        h.imageUrl.isNotEmpty
+                            ? Image.network(
+                              h.imageUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  _bookSearchThumbPlaceholder(theme),
+                              errorBuilder:
+                                  (_, __, ___) =>
+                                      _bookSearchThumbPlaceholder(theme),
                             )
-                          : _bookSearchThumbPlaceholder(theme),
-                    ),
+                            : _bookSearchThumbPlaceholder(theme),
                   ),
-                  title: Text(
-                    h.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    [
-                      if (h.author != null && h.author!.isNotEmpty) h.author!,
-                      if (h.publisher != null && h.publisher!.isNotEmpty)
-                        h.publisher!,
-                    ].join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    setState(() {
-                      _selectedIndex = i;
-                      _titleCtrl.text = h.title;
-                    });
-                  },
                 ),
-              ],
-            );
-          },
-          childCount: _hits.length,
-        ),
+                title: Text(
+                  h.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  [
+                    if (h.author != null && h.author!.isNotEmpty) h.author!,
+                    if (h.publisher != null && h.publisher!.isNotEmpty)
+                      h.publisher!,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  _suppressSelectionSync = true;
+                  _titleCtrl.text = h.title;
+                  _isbnCtrl.text = h.isbn;
+                  _imageUrlCtrl.text = h.imageUrl;
+                  _suppressSelectionSync = false;
+                  setState(() => _selectedIndex = i);
+                },
+              ),
+            ],
+          );
+        }, childCount: _hits.length),
       ),
     ];
   }
@@ -260,6 +370,14 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                       ExpansionTile(
                         initiallyExpanded: !bookSearchEnabled,
                         title: const Text('Manual entry'),
+                        subtitle: Text(
+                          _selectedIndex >= 0
+                              ? 'A search result is selected — Save uses it.'
+                              : 'Title + ISBN required. Cover URL optional.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                         children: [
                           TextField(
                             controller: _titleCtrl,
@@ -269,29 +387,28 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                               isDense: true,
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _isbnCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'ISBN (required)',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _imageUrlCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Cover image URL (optional)',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      FilledButton(
-                        onPressed: () async {
-                          final t = _titleCtrl.text.trim();
-                          if (t.isEmpty) return;
-                          final tp = int.tryParse(_pagesCtrl.text.trim());
-                          await ref
-                              .read(databaseProvider)
-                              .insertBook(title: t, totalPages: tp);
-                          ref.read(readingDataTickProvider.notifier).state++;
-                          if (!mounted) return;
-                          // Avoid InkWell / MediaQuery lookups on deactivated subtree
-                          // when the route pops (focus highlight mode can still notify).
-                          FocusManager.instance.primaryFocus?.unfocus();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted) return;
-                            Navigator.of(context).pop();
-                          });
-                        },
-                        child: const Text('Save'),
-                      ),
+                      FilledButton(onPressed: _save, child: const Text('Save')),
                     ],
                   ),
                 ),
@@ -325,11 +442,21 @@ class BooksScreen extends ConsumerWidget {
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final b = list[i];
+              final theme = Theme.of(context);
               return ListTile(
+                leading: SizedBox(
+                  width: 48,
+                  height: 56,
+                  child: _shelfThumb(b, theme),
+                ),
                 title: Text(b.title),
                 subtitle: Text(
-                  b.totalPages != null ? '${b.totalPages} pages' : 'Pages: —',
+                  [
+                    b.isbn,
+                    if (b.totalPages != null) '${b.totalPages} pages',
+                  ].join(' · '),
                 ),
+                isThreeLine: false,
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () async {
@@ -377,6 +504,13 @@ class BooksScreen extends ConsumerWidget {
 
   Future<void> _editBook(BuildContext context, WidgetRef ref, Book b) async {
     final titleCtrl = TextEditingController(text: b.title);
+    final isbnCtrl = TextEditingController(text: b.isbn);
+    final imageUrlCtrl = TextEditingController(text: b.imageUrl);
+    final linkCtrl = TextEditingController(text: b.link ?? '');
+    final authorCtrl = TextEditingController(text: b.author ?? '');
+    final publisherCtrl = TextEditingController(text: b.publisher ?? '');
+    final pubdateCtrl = TextEditingController(text: b.pubdate ?? '');
+    final descriptionCtrl = TextEditingController(text: b.description ?? '');
     final pagesCtrl = TextEditingController(
       text: b.totalPages?.toString() ?? '',
     );
@@ -392,48 +526,161 @@ class BooksScreen extends ConsumerWidget {
             top: 8,
             bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Edit book', style: Theme.of(ctx).textTheme.titleMedium),
-              TextField(
-                controller: titleCtrl,
-                decoration: const InputDecoration(labelText: 'Title'),
-              ),
-              TextField(
-                controller: pagesCtrl,
-                decoration: const InputDecoration(labelText: 'Total pages'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () async {
-                  final t = titleCtrl.text.trim();
-                  if (t.isEmpty) return;
-                  final tp = int.tryParse(pagesCtrl.text.trim());
-                  await ref
-                      .read(databaseProvider)
-                      .updateBook(
-                        Book(
-                          id: b.id,
-                          title: t,
-                          totalPages: tp,
-                          completionNote: b.completionNote,
-                          createdAt: b.createdAt,
+          child: SizedBox(
+            height: MediaQuery.sizeOf(ctx).height * 0.85,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Edit book', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: titleCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Title',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      );
-                  ref.read(readingDataTickProvider.notifier).state++;
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-            ],
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: isbnCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'ISBN',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: imageUrlCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Cover image URL',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: linkCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Naver book link (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: authorCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Author',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: publisherCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Publisher',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: pubdateCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Pub. date (API string)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: descriptionCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Description',
+                            border: OutlineInputBorder(),
+                            alignLabelWithHint: true,
+                          ),
+                          minLines: 2,
+                          maxLines: 6,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: pagesCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Total pages',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () async {
+                    final t = titleCtrl.text.trim();
+                    final isbn = isbnCtrl.text.trim();
+                    if (t.isEmpty || isbn.isEmpty) return;
+                    final img = imageUrlCtrl.text.trim();
+                    final tp = int.tryParse(pagesCtrl.text.trim());
+                    final db = ref.read(databaseProvider);
+                    final other = await db.bookByIsbn(isbn);
+                    if (other != null && other.id != b.id) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'ISBN already used by: ${other.title}',
+                            ),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+                    String? emptyToNull(String s) {
+                      final v = s.trim();
+                      return v.isEmpty ? null : v;
+                    }
+
+                    await ref
+                        .read(databaseProvider)
+                        .updateBook(
+                          Book(
+                            id: b.id,
+                            title: t,
+                            isbn: isbn,
+                            imageUrl: img,
+                            link: emptyToNull(linkCtrl.text),
+                            author: emptyToNull(authorCtrl.text),
+                            publisher: emptyToNull(publisherCtrl.text),
+                            description: emptyToNull(descriptionCtrl.text),
+                            pubdate: emptyToNull(pubdateCtrl.text),
+                            totalPages: tp,
+                            completionNote: b.completionNote,
+                            createdAt: b.createdAt,
+                          ),
+                        );
+                    ref.read(readingDataTickProvider.notifier).state++;
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
           ),
         );
       },
     ).whenComplete(() {
       titleCtrl.dispose();
+      isbnCtrl.dispose();
+      imageUrlCtrl.dispose();
+      linkCtrl.dispose();
+      authorCtrl.dispose();
+      publisherCtrl.dispose();
+      pubdateCtrl.dispose();
+      descriptionCtrl.dispose();
       pagesCtrl.dispose();
     });
   }

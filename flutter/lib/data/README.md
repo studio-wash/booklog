@@ -11,7 +11,7 @@
 ## 코드 위치
 
 - **Flutter**: `flutter/lib/data/app_database.dart`
-- **로컬 파일**: 기본 경로 파일명 `booklog_store.db` (프리릴리즈 중 스키마 변경 시 이전 `booklog.db`는 사용하지 않음). `sqflite` `userVersion`은 **1** 고정, 마이그레이션 없음.
+- **로컬 파일**: 기본 경로 파일명 `booklog_store.db`. `userVersion` **2**: `books`에 ISBN(유일)·표지 URL·링크·저자·출판사·설명·출간일 등 저장. v1 DB 파일을 열면 **onUpgrade에서 테이블 드롭 후 재생성**(데이터 소실, 마이그레이션 없음).
 
 ## Spec-Code 매핑
 
@@ -26,6 +26,7 @@
 
 ## 생성/수정 이력
 
+- 2026-05-15: `books` 스키마 v2 — ISBN(유일)·표지·저자·출판사·설명·출간일·링크 저장; v1→v2 업그레이드 시 테이블 재생성.
 - 2026-05-12: PLAN-000002 — `latestReadingEntry`, `bookById`, 테스트용 `insertEntry`의 `createdAt` 선택 인자.
 - 2026-05-12: 메인 잔디 집계용 `entriesBetween` 추가. (이후 메인 창은 **12개 달** 롤링 + `dayPageTotalsRolling12MonthsProvider`.)
 - 2026-05-12: PLAN-000001 완료 — `AppDatabase`·스키마·쿼리 확정

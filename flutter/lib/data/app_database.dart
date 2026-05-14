@@ -2,10 +2,20 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 /// Book row (Spec FR-1).
+///
+/// [isbn] is required (non-empty); unique in DB. [imageUrl] may be empty when
+/// no cover URL is known; UI should show a placeholder.
 class Book {
   Book({
     required this.id,
     required this.title,
+    required this.isbn,
+    required this.imageUrl,
+    this.link,
+    this.author,
+    this.publisher,
+    this.description,
+    this.pubdate,
     this.totalPages,
     this.completionNote,
     required this.createdAt,
@@ -13,6 +23,13 @@ class Book {
 
   final int id;
   final String title;
+  final String isbn;
+  final String imageUrl;
+  final String? link;
+  final String? author;
+  final String? publisher;
+  final String? description;
+  final String? pubdate;
   final int? totalPages;
   final String? completionNote;
   final DateTime createdAt;
@@ -20,10 +37,47 @@ class Book {
   static Book fromMap(Map<String, Object?> m) => Book(
     id: m['id']! as int,
     title: m['title']! as String,
+    isbn: m['isbn']! as String,
+    imageUrl: (m['image_url'] as String?) ?? '',
+    link: m['link'] as String?,
+    author: m['author'] as String?,
+    publisher: m['publisher'] as String?,
+    description: m['description'] as String?,
+    pubdate: m['pubdate'] as String?,
     totalPages: m['total_pages'] as int?,
     completionNote: m['completion_note'] as String?,
     createdAt: DateTime.fromMillisecondsSinceEpoch(m['created_at']! as int),
   );
+
+  Book copyWith({
+    int? id,
+    String? title,
+    String? isbn,
+    String? imageUrl,
+    String? link,
+    String? author,
+    String? publisher,
+    String? description,
+    String? pubdate,
+    int? totalPages,
+    String? completionNote,
+    DateTime? createdAt,
+  }) {
+    return Book(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      isbn: isbn ?? this.isbn,
+      imageUrl: imageUrl ?? this.imageUrl,
+      link: link ?? this.link,
+      author: author ?? this.author,
+      publisher: publisher ?? this.publisher,
+      description: description ?? this.description,
+      pubdate: pubdate ?? this.pubdate,
+      totalPages: totalPages ?? this.totalPages,
+      completionNote: completionNote ?? this.completionNote,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
 
 /// Reading log row (Spec FR-2, FR-3).
@@ -71,9 +125,9 @@ class AppDatabase {
 
   final Database _db;
 
-  /// Pre-MVP: stays at 1; schema changes reset by **new default file name**
-  /// (no migration path until first store release).
-  static const int _schemaVersion = 1;
+  /// v2: full Naver catalog fields (no price columns). v1 → v2 **drops** books
+  /// and reading_entries (no row migration until store release).
+  static const int _schemaVersion = 2;
 
   static Future<AppDatabase> open({String? pathOverride}) async {
     final path =
@@ -87,6 +141,13 @@ class AppDatabase {
       onCreate: (db, version) async {
         await _createSchema(db);
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('DROP TABLE IF EXISTS reading_entries');
+          await db.execute('DROP TABLE IF EXISTS books');
+          await _createSchema(db);
+        }
+      },
     );
     return AppDatabase._(db);
   }
@@ -96,9 +157,17 @@ class AppDatabase {
 CREATE TABLE books (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
+  isbn TEXT NOT NULL,
+  image_url TEXT NOT NULL,
+  link TEXT,
+  author TEXT,
+  publisher TEXT,
+  description TEXT,
+  pubdate TEXT,
   total_pages INTEGER,
   completion_note TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  UNIQUE (isbn)
 );
 ''');
     await db.execute('''
@@ -142,9 +211,37 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
     return rows.map(Book.fromMap).toList();
   }
 
-  Future<Book> insertBook({required String title, int? totalPages}) async {
+  Future<Book?> bookByIsbn(String isbn) async {
+    final rows = await _db.query(
+      'books',
+      where: 'isbn = ?',
+      whereArgs: [isbn],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Book.fromMap(rows.single);
+  }
+
+  Future<Book> insertBook({
+    required String title,
+    required String isbn,
+    required String imageUrl,
+    String? link,
+    String? author,
+    String? publisher,
+    String? description,
+    String? pubdate,
+    int? totalPages,
+  }) async {
     final id = await _db.insert('books', {
       'title': title,
+      'isbn': isbn,
+      'image_url': imageUrl,
+      'link': link,
+      'author': author,
+      'publisher': publisher,
+      'description': description,
+      'pubdate': pubdate,
       'total_pages': totalPages,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
@@ -157,6 +254,13 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
       'books',
       {
         'title': book.title,
+        'isbn': book.isbn,
+        'image_url': book.imageUrl,
+        'link': book.link,
+        'author': book.author,
+        'publisher': book.publisher,
+        'description': book.description,
+        'pubdate': book.pubdate,
         'total_pages': book.totalPages,
         'completion_note': book.completionNote,
       },

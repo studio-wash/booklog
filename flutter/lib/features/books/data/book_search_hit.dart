@@ -1,18 +1,29 @@
 /// One row from Naver book search JSON (`items[]`).
 ///
 /// Spec FR-7 / PLAN-000003 — see `knowledge/reference/api/naver-book-search.md`.
+/// Price-related fields (`discount`, etc.) are intentionally not parsed.
 class BookSearchHit {
   const BookSearchHit({
     required this.title,
-    this.imageUrl,
+    required this.isbn,
+    required this.imageUrl,
+    this.link,
     this.author,
     this.publisher,
+    this.description,
+    this.pubdate,
   });
 
   final String title;
-  final String? imageUrl;
+
+  /// Raw value from API (often `10digit 13digit` in one string).
+  final String isbn;
+  final String imageUrl;
+  final String? link;
   final String? author;
   final String? publisher;
+  final String? description;
+  final String? pubdate;
 
   static String _stripHtml(String s) => s.replaceAll(RegExp(r'<[^>]*>'), '');
 
@@ -26,17 +37,39 @@ class BookSearchHit {
     return s.isEmpty ? null : s;
   }
 
-  /// Returns null if [json] has no usable title.
+  static String _isbnField(dynamic v) {
+    if (v == null) return '';
+    if (v is String) return v.trim();
+    return v.toString().trim();
+  }
+
+  /// Returns null if [json] has no usable title or **empty ISBN** (required for shelf rows).
   static BookSearchHit? tryParse(Map<String, dynamic> json) {
     final rawTitle = json['title'];
     if (rawTitle is! String || rawTitle.trim().isEmpty) return null;
     final title = _stripHtml(rawTitle).trim();
     if (title.isEmpty) return null;
+
+    final isbn = _isbnField(json['isbn']);
+    if (isbn.isEmpty) return null;
+
+    final rawDesc = json['description'];
+    final description =
+        rawDesc is String && rawDesc.trim().isNotEmpty
+            ? _stripHtml(rawDesc).trim()
+            : _stringField(rawDesc);
+
+    final imageUrl = _stringField(json['image']) ?? '';
+
     return BookSearchHit(
       title: title,
-      imageUrl: _stringField(json['image']),
+      isbn: isbn,
+      imageUrl: imageUrl,
+      link: _stringField(json['link']),
       author: _stringField(json['author']),
       publisher: _stringField(json['publisher']),
+      description: description,
+      pubdate: _stringField(json['pubdate']),
     );
   }
 }

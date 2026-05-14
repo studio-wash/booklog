@@ -190,13 +190,9 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
                         await ref
                             .read(databaseProvider)
                             .updateBook(
-                              Book(
-                                id: book.id,
-                                title: book.title,
-                                totalPages: book.totalPages,
+                              book.copyWith(
                                 completionNote:
                                     note.isEmpty ? book.completionNote : note,
-                                createdAt: book.createdAt,
                               ),
                             );
                         ref.read(readingDataTickProvider.notifier).state++;
