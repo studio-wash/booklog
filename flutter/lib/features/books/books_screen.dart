@@ -48,6 +48,7 @@ class _AddBookSheetBody extends ConsumerStatefulWidget {
 class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _pagesCtrl;
+  late final TextEditingController _baselineCtrl;
   late final TextEditingController _searchCtrl;
   late final TextEditingController _isbnCtrl;
   late final TextEditingController _imageUrlCtrl;
@@ -64,6 +65,7 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
     super.initState();
     _titleCtrl = TextEditingController();
     _pagesCtrl = TextEditingController();
+    _baselineCtrl = TextEditingController();
     _searchCtrl = TextEditingController();
     _isbnCtrl = TextEditingController();
     _imageUrlCtrl = TextEditingController();
@@ -90,6 +92,7 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
     _imageUrlCtrl.removeListener(_syncSelectionClear);
     _titleCtrl.dispose();
     _pagesCtrl.dispose();
+    _baselineCtrl.dispose();
     _searchCtrl.dispose();
     _isbnCtrl.dispose();
     _imageUrlCtrl.dispose();
@@ -172,6 +175,35 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
       return;
     }
 
+    int? startingBaseline;
+    final baselineRaw = _baselineCtrl.text.trim();
+    if (baselineRaw.isNotEmpty) {
+      final bl = int.tryParse(baselineRaw);
+      if (bl == null || bl < 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '“Already read up to page” must be empty or a whole number ≥ 0.',
+            ),
+          ),
+        );
+        return;
+      }
+      if (tp != null && tp > 0 && bl >= tp) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Prior last page must be less than total pages when both are set.',
+            ),
+          ),
+        );
+        return;
+      }
+      startingBaseline = bl;
+    }
+
     await db.insertBook(
       title: title,
       isbn: isbn,
@@ -182,6 +214,7 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
       description: description,
       pubdate: pubdate,
       totalPages: tp,
+      startingLastPageRead: startingBaseline,
     );
     ref.read(readingDataTickProvider.notifier).state++;
     if (!mounted) return;
@@ -367,6 +400,19 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                         ),
                         keyboardType: TextInputType.number,
                       ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _baselineCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Already read up to page (optional)',
+                          helperText:
+                              'If you were on e.g. page 99 before adding here, '
+                              'enter 99 so the next log counts from 100.',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
                       const SizedBox(height: 4),
                       ExpansionTile(
                         initiallyExpanded: !bookSearchEnabled,
@@ -513,6 +559,10 @@ class BooksScreen extends ConsumerWidget {
   }
 
   Future<void> _editBook(BuildContext context, WidgetRef ref, Book b) async {
+    final db = ref.read(databaseProvider);
+    final entryCount = await db.readingEntryCountForBook(b.id);
+    final canEditBaseline = entryCount == 0;
+
     final titleCtrl = TextEditingController(text: b.title);
     final isbnCtrl = TextEditingController(text: b.isbn);
     final imageUrlCtrl = TextEditingController(text: b.imageUrl);
@@ -524,6 +574,10 @@ class BooksScreen extends ConsumerWidget {
     final pagesCtrl = TextEditingController(
       text: b.totalPages?.toString() ?? '',
     );
+    final baselineCtrl = TextEditingController(
+      text: b.startingLastPageRead?.toString() ?? '',
+    );
+    if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -623,6 +677,19 @@ class BooksScreen extends ConsumerWidget {
                           ),
                           keyboardType: TextInputType.number,
                         ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: baselineCtrl,
+                          readOnly: !canEditBaseline,
+                          decoration: InputDecoration(
+                            labelText: 'Already read up to page (optional)',
+                            helperText: canEditBaseline
+                                ? 'Set before your first log. Locked after logs exist.'
+                                : 'Locked: change is disabled once reading logs exist.',
+                            border: const OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
                       ],
                     ),
                   ),
@@ -635,8 +702,14 @@ class BooksScreen extends ConsumerWidget {
                     if (t.isEmpty || isbn.isEmpty) return;
                     final img = imageUrlCtrl.text.trim();
                     final tp = int.tryParse(pagesCtrl.text.trim());
-                    final db = ref.read(databaseProvider);
-                    final other = await db.bookByIsbn(isbn);
+
+                    String? emptyToNull(String s) {
+                      final v = s.trim();
+                      return v.isEmpty ? null : v;
+                    }
+
+                    final dbSave = ref.read(databaseProvider);
+                    final other = await dbSave.bookByIsbn(isbn);
                     if (other != null && other.id != b.id) {
                       if (ctx.mounted) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
@@ -649,14 +722,43 @@ class BooksScreen extends ConsumerWidget {
                       }
                       return;
                     }
-                    String? emptyToNull(String s) {
-                      final v = s.trim();
-                      return v.isEmpty ? null : v;
+
+                    int? startingBaseline = b.startingLastPageRead;
+                    if (canEditBaseline) {
+                      final br = baselineCtrl.text.trim();
+                      if (br.isEmpty) {
+                        startingBaseline = null;
+                      } else {
+                        final bl = int.tryParse(br);
+                        if (bl == null || bl < 0) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Prior last page must be empty or a whole number ≥ 0.',
+                                ),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+                        if (tp != null && tp > 0 && bl >= tp) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Prior last page must be less than total pages.',
+                                ),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+                        startingBaseline = bl;
+                      }
                     }
 
-                    await ref
-                        .read(databaseProvider)
-                        .updateBook(
+                    await ref.read(databaseProvider).updateBook(
                           Book(
                             id: b.id,
                             title: t,
@@ -669,6 +771,7 @@ class BooksScreen extends ConsumerWidget {
                             pubdate: emptyToNull(pubdateCtrl.text),
                             totalPages: tp,
                             completionNote: b.completionNote,
+                            startingLastPageRead: startingBaseline,
                             createdAt: b.createdAt,
                           ),
                         );
@@ -692,6 +795,7 @@ class BooksScreen extends ConsumerWidget {
       pubdateCtrl.dispose();
       descriptionCtrl.dispose();
       pagesCtrl.dispose();
+      baselineCtrl.dispose();
     });
   }
 }

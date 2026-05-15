@@ -1,5 +1,5 @@
-// Spec: spec/features/booklog-mvp/booklog-mvp.md — FR-11
-// Plan: plan/PLAN-000004_dev-db-export-import/plan.md
+// Spec: spec/features/booklog-mvp/booklog-mvp.md — FR-11, export `books` shape
+// Plan: plan/PLAN-000004_dev-db-export-import/plan.md, PLAN-000005 (optional `starting_last_page_read` in example)
 
 /// JSON file **format** version (not the same as SQLite `userVersion`).
 const int booklogExportFormatVersion = 1;
@@ -17,7 +17,7 @@ const String kExportKeyReadingEntries = 'reading_entries';
 const String kBooklogExportExampleJson = '''
 {
   "export_schema_version": 1,
-  "app_schema_version": 2,
+  "app_schema_version": 3,
   "exported_at": "2026-05-15T12:00:00.000Z",
   "books": [
     {
@@ -32,6 +32,7 @@ const String kBooklogExportExampleJson = '''
       "pubdate": "20200101",
       "total_pages": 300,
       "completion_note": null,
+      "starting_last_page_read": null,
       "created_at": 1715769600000
     }
   ],

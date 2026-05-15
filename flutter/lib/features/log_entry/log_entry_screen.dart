@@ -287,16 +287,34 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
                 onChanged: (v) => setState(() => _bookId = v),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _lastPageCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Last page you read',
-                  hintText: 'e.g. 42',
-                  helperText:
-                      'Page you stopped on. For a past day, it must fit between '
-                      'earlier and later logs for this book on the timeline.',
-                ),
-                keyboardType: TextInputType.number,
+              Builder(
+                builder: (context) {
+                  Book? sel;
+                  for (final x in list) {
+                    if (x.id == _bookId) {
+                      sel = x;
+                      break;
+                    }
+                  }
+                  final bl = sel?.startingLastPageRead;
+                  return TextField(
+                    controller: _lastPageCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Last page you read',
+                      hintText: 'e.g. 42',
+                      helperText:
+                          bl != null
+                              ? 'You set prior progress through page $bl — '
+                                    'enter at least ${bl + 1} unless a timeline '
+                                    'log requires more. Must fit earlier/later '
+                                    'logs for this book.'
+                              : 'Page you stopped on. For a past day, it must '
+                                    'fit between earlier and later logs for this '
+                                    'book on the timeline.',
+                    ),
+                    keyboardType: TextInputType.number,
+                  );
+                },
               ),
               const SizedBox(height: 8),
               ExpansionTile(

@@ -1,3 +1,6 @@
+# Agent / local scratch (do not commit)
+.work/
+
 # Miscellaneous
 *.class
 *.log

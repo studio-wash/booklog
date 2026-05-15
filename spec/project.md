@@ -18,3 +18,4 @@
 
 - **PLAN-000001**: `plan/PLAN-000001_haruhanjang-mvp/plan.md`
 - **PLAN-000003**: `plan/PLAN-000003_add-book-search-first/plan.md` — 새 책 추가 검색 우선 UI
+- **PLAN-000005**: `plan/PLAN-000005_resume-reading-from-page/plan.md` — 앱 등록 전 읽던 마지막 쪽 기준선

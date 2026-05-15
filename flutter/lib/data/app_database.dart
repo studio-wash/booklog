@@ -5,6 +5,8 @@ import 'package:sqflite/sqflite.dart';
 
 import 'booklog_export_format.dart';
 
+// Plan: plan/PLAN-000005_resume-reading-from-page/plan.md — starting baseline
+
 /// Book row (Spec FR-1).
 ///
 /// [isbn] is required (non-empty); unique in DB. [imageUrl] may be empty when
@@ -22,6 +24,7 @@ class Book {
     this.pubdate,
     this.totalPages,
     this.completionNote,
+    this.startingLastPageRead,
     required this.createdAt,
   });
 
@@ -36,6 +39,9 @@ class Book {
   final String? pubdate;
   final int? totalPages;
   final String? completionNote;
+  /// Pages already read before the first in-app log (PLAN-000005). Inclusive
+  /// “last page reached” outside the app; first log must be `> this` (or null).
+  final int? startingLastPageRead;
   final DateTime createdAt;
 
   static Book fromMap(Map<String, Object?> m) => Book(
@@ -50,6 +56,7 @@ class Book {
     pubdate: m['pubdate'] as String?,
     totalPages: m['total_pages'] as int?,
     completionNote: m['completion_note'] as String?,
+    startingLastPageRead: m['starting_last_page_read'] as int?,
     createdAt: DateTime.fromMillisecondsSinceEpoch(m['created_at']! as int),
   );
 
@@ -65,6 +72,7 @@ class Book {
     String? pubdate,
     int? totalPages,
     String? completionNote,
+    int? startingLastPageRead,
     DateTime? createdAt,
   }) {
     return Book(
@@ -79,6 +87,8 @@ class Book {
       pubdate: pubdate ?? this.pubdate,
       totalPages: totalPages ?? this.totalPages,
       completionNote: completionNote ?? this.completionNote,
+      startingLastPageRead:
+          startingLastPageRead ?? this.startingLastPageRead,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -123,15 +133,15 @@ class ReadingEntry {
   }
 }
 
-/// Local SQLite (sqflite). Plan: `persist-layer`.
+/// Local SQLite (sqflite). Plan: `persist-layer`; PLAN-000005 baseline page.
 class AppDatabase {
   AppDatabase._(this._db);
 
   final Database _db;
 
-  /// v2: full Naver catalog fields (no price columns). v1 → v2 **drops** books
-  /// and reading_entries (no row migration until store release).
-  static const int _schemaVersion = 2;
+  /// v2: full Naver catalog fields. v3: `starting_last_page_read` on books
+  /// (PLAN-000005). v1 → v2 **drops** books and reading_entries.
+  static const int _schemaVersion = 3;
 
   /// Same as SQLite `userVersion` — used in JSON export (`app_schema_version`).
   static int get booklogDbSchemaVersion => _schemaVersion;
@@ -153,6 +163,10 @@ class AppDatabase {
           await db.execute('DROP TABLE IF EXISTS reading_entries');
           await db.execute('DROP TABLE IF EXISTS books');
           await _createSchema(db);
+        } else if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN starting_last_page_read INTEGER',
+          );
         }
       },
     );
@@ -173,6 +187,7 @@ CREATE TABLE books (
   pubdate TEXT,
   total_pages INTEGER,
   completion_note TEXT,
+  starting_last_page_read INTEGER,
   created_at INTEGER NOT NULL,
   UNIQUE (isbn)
 );
@@ -239,7 +254,24 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
     String? description,
     String? pubdate,
     int? totalPages,
+    int? startingLastPageRead,
   }) async {
+    if (startingLastPageRead != null) {
+      if (startingLastPageRead < 0) {
+        throw ArgumentError.value(
+          startingLastPageRead,
+          'startingLastPageRead',
+          'Must be null or >= 0',
+        );
+      }
+      if (totalPages != null &&
+          totalPages > 0 &&
+          startingLastPageRead >= totalPages) {
+        throw ArgumentError(
+          'starting_last_page_read must be less than total_pages when set.',
+        );
+      }
+    }
     final id = await _db.insert('books', {
       'title': title,
       'isbn': isbn,
@@ -250,6 +282,7 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
       'description': description,
       'pubdate': pubdate,
       'total_pages': totalPages,
+      'starting_last_page_read': startingLastPageRead,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
     final rows = await _db.query('books', where: 'id = ?', whereArgs: [id]);
@@ -270,6 +303,7 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
         'pubdate': book.pubdate,
         'total_pages': book.totalPages,
         'completion_note': book.completionNote,
+        'starting_last_page_read': book.startingLastPageRead,
       },
       where: 'id = ?',
       whereArgs: [book.id],
@@ -278,6 +312,17 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
 
   Future<void> deleteBook(int id) async {
     await _db.delete('books', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Count of reading logs for [bookId] (for PLAN-000005 baseline edit guard).
+  Future<int> readingEntryCountForBook(int bookId) async {
+    final n = Sqflite.firstIntValue(
+      await _db.rawQuery(
+        'SELECT COUNT(*) FROM reading_entries WHERE book_id = ?',
+        [bookId],
+      ),
+    );
+    return n ?? 0;
   }
 
   Future<List<ReadingEntry>> entriesForMonth(int year, int month) async {
@@ -359,13 +404,13 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
     final at = createdAt ?? DateTime.now();
     final ts = at.millisecondsSinceEpoch;
     final dk = _dateKey(calendarDate);
-    final prev = await _maxLastPageReadBefore(bookId, dk, ts);
+    final prev = await _effectivePrevFloor(bookId, dk, ts);
     final next = await _minLastPageReadAfter(bookId, dk, ts);
-    if (lastPageRead < prev) {
+    if (lastPageRead <= prev) {
       throw ArgumentError.value(
         lastPageRead,
         'lastPageRead',
-        'Must be ≥ $prev (last page on or before this log’s place in time)',
+        'Must be > $prev (must advance past the timeline floor / prior progress)',
       );
     }
     if (next != null && lastPageRead > next) {
@@ -402,12 +447,14 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
   }) async {
     final ts = (atTime ?? DateTime.now()).millisecondsSinceEpoch;
     final dk = _dateKey(calendarDate);
-    final lower = await _maxLastPageReadBefore(bookId, dk, ts);
+    final prev = await _effectivePrevFloor(bookId, dk, ts);
     final upper = await _minLastPageReadAfter(bookId, dk, ts);
-    return (lowerBound: lower, upperBound: upper);
+    final lb = prev + 1;
+    return (lowerBound: lb < 1 ? 1 : lb, upperBound: upper);
   }
 
-  Future<int> _maxLastPageReadBefore(
+  /// Max `last_page_read` from rows **strictly before** this slot (entries only).
+  Future<int> _entryMaxLastPageReadBefore(
     int bookId,
     String dateKey,
     int createdAtMs,
@@ -422,6 +469,33 @@ WHERE book_id = ? AND (
       [bookId, dateKey, dateKey, createdAtMs],
     );
     return (r.first['m'] as int?) ?? 0;
+  }
+
+  Future<int> _startingLastPageBaseline(int bookId) async {
+    final rows = await _db.query(
+      'books',
+      columns: ['starting_last_page_read'],
+      where: 'id = ?',
+      whereArgs: [bookId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return 0;
+    return (rows.single['starting_last_page_read'] as int?) ?? 0;
+  }
+
+  /// Timeline floor: max(reading progress before this slot, off-app baseline).
+  Future<int> _effectivePrevFloor(
+    int bookId,
+    String dateKey,
+    int createdAtMs,
+  ) async {
+    final fromEntries = await _entryMaxLastPageReadBefore(
+      bookId,
+      dateKey,
+      createdAtMs,
+    );
+    final baseline = await _startingLastPageBaseline(bookId);
+    return fromEntries > baseline ? fromEntries : baseline;
   }
 
   Future<int?> _minLastPageReadAfter(
@@ -451,7 +525,17 @@ WHERE book_id = ? AND (
       whereArgs: [bookId],
       orderBy: 'calendar_date ASC, created_at ASC, id ASC',
     );
+    final bRows = await _db.query(
+      'books',
+      columns: ['starting_last_page_read'],
+      where: 'id = ?',
+      whereArgs: [bookId],
+      limit: 1,
+    );
     var prevL = 0;
+    if (bRows.isNotEmpty) {
+      prevL = (bRows.single['starting_last_page_read'] as int?) ?? 0;
+    }
     for (final row in rows) {
       final id = row['id']! as int;
       final l = row['last_page_read']! as int;
@@ -468,13 +552,15 @@ WHERE book_id = ? AND (
     }
   }
 
-  /// Highest [lastPageRead] stored for [bookId] (0 if none).
+  /// Highest absolute page for [bookId]: max(latest entry, off-app baseline).
   Future<int> maxLastPageReadForBook(int bookId) async {
     final r = await _db.rawQuery(
       'SELECT COALESCE(MAX(last_page_read), 0) AS m FROM reading_entries WHERE book_id = ?',
       [bookId],
     );
-    return (r.first['m'] as int?) ?? 0;
+    final entryMax = (r.first['m'] as int?) ?? 0;
+    final baseline = await _startingLastPageBaseline(bookId);
+    return entryMax > baseline ? entryMax : baseline;
   }
 
   /// Sum of per-log [pages] (deltas) for [bookId].
@@ -628,6 +714,24 @@ WHERE book_id = ? AND (
     }
     _numInt(row['created_at']);
     _numInt(row['id']);
+    final sl = row['starting_last_page_read'];
+    if (sl != null) {
+      final v = _numInt(sl);
+      if (v < 0) {
+        throw const BooklogImportException(
+          'starting_last_page_read must be >= 0 when set.',
+        );
+      }
+      final tpRaw = row['total_pages'];
+      if (tpRaw != null) {
+        final tp = _numInt(tpRaw);
+        if (tp > 0 && v >= tp) {
+          throw const BooklogImportException(
+            'starting_last_page_read must be less than total_pages when both set.',
+          );
+        }
+      }
+    }
   }
 
   static void _validateEntryExportRow(Map<String, Object?> row) {
@@ -658,6 +762,10 @@ WHERE book_id = ? AND (
       'pubdate': row['pubdate'],
       'total_pages': row['total_pages'],
       'completion_note': row['completion_note'],
+      'starting_last_page_read':
+          row['starting_last_page_read'] == null
+              ? null
+              : _numInt(row['starting_last_page_read']),
       'created_at': _numInt(row['created_at']),
     };
   }
