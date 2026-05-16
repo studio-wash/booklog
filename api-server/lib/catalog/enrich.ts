@@ -56,7 +56,7 @@ export async function enrichNaverSearchItems(
       continue;
     }
 
-    const isbn13 = upsertFromNaver(fields);
+    const isbn13 = await upsertFromNaver(fields);
     if (!isbn13) {
       recordAladinSkip(metrics, 'no_isbn');
       item.total_pages = null;
@@ -64,19 +64,19 @@ export async function enrichNaverSearchItems(
       continue;
     }
 
-    let pages = getCatalogTotalPages(isbn13);
+    let pages = await getCatalogTotalPages(isbn13);
 
     if (pages == null && hasKey && aladinAttempts < aladinCap) {
       metrics.attempted += 1;
       aladinAttempts += 1;
 
-      if (!canCallAladin()) {
+      if (!(await canCallAladin())) {
         recordAladinSkip(metrics, 'limit');
       } else {
         const lookedUp = await lookupItemPageByIsbn13(isbn13, ttbKey);
         if (lookedUp != null) {
-          setCatalogTotalPagesFromAladin(isbn13, lookedUp);
-          incrementAladinCallCount();
+          await setCatalogTotalPagesFromAladin(isbn13, lookedUp);
+          await incrementAladinCallCount();
           pages = lookedUp;
           metrics.enriched += 1;
         } else {
@@ -92,7 +92,7 @@ export async function enrichNaverSearchItems(
   }
 
   const day = new Date().toISOString().slice(0, 10);
-  const callCount = getAladinCallCount(day);
+  const callCount = await getAladinCallCount(day);
   logAladinMetrics(metrics, day, callCount);
 
   return { items: out, aladinMetrics: metrics, aladinCallCount: callCount };
@@ -123,7 +123,9 @@ export async function enrichNaverSearchItemsSafe(
 }
 
 /** Attach total_pages from catalog for a single raw isbn (no Aladin call). */
-export function attachTotalPagesFromCatalog(item: Record<string, unknown>): Record<string, unknown> {
+export async function attachTotalPagesFromCatalog(
+  item: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const isbnRaw =
     typeof item.isbn === 'string'
       ? item.isbn
@@ -131,6 +133,6 @@ export function attachTotalPagesFromCatalog(item: Record<string, unknown>): Reco
         ? String(item.isbn)
         : '';
   const isbn13 = normalizeIsbn13(isbnRaw);
-  const pages = isbn13 ? getCatalogTotalPages(isbn13) : null;
+  const pages = isbn13 ? await getCatalogTotalPages(isbn13) : null;
   return { ...item, total_pages: pages ?? null };
 }

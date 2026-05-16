@@ -20,14 +20,22 @@ Next.js proxy for Naver book search + shared ISBN catalog (PLAN-000007).
 
 ## Env
 
-Copy `.env.example` → `.env` (gitignored). Required for search: `NAVER_*`. Optional enrich: `ALADIN_TTB_KEY`.
+Copy `.env.example` → `.env` (gitignored).
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | search | Naver book API |
+| `DATABASE_URL` | Vercel / shared catalog | [Neon](https://neon.tech) Postgres connection string |
+| `ALADIN_TTB_KEY` | optional | Aladin `total_pages` enrich |
+
+Without `DATABASE_URL`, catalog uses local SQLite (`data/catalog.sqlite`). On Vercel, set `DATABASE_URL` so catalog survives cold starts.
 
 ## Code layout
 
 | Path | Role |
 |------|------|
 | `lib/isbn.ts` | ISBN-13 normalization |
-| `lib/catalog/` | SQLite `book_catalog`, Naver upsert, enrich |
+| `lib/catalog/` | Neon Postgres (or SQLite locally) `book_catalog`, Naver upsert, enrich |
 | `lib/aladin/` | ItemLookUp client, daily limit, metrics |
 | `app/api/books/search/route.ts` | Search handler |
 

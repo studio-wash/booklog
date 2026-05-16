@@ -1,59 +1,5 @@
-import Database from 'better-sqlite3';
-import fs from 'node:fs';
-import path from 'node:path';
-
-const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS book_catalog (
-  isbn13 TEXT PRIMARY KEY,
-  title TEXT,
-  image_url TEXT,
-  author TEXT,
-  publisher TEXT,
-  pubdate TEXT,
-  link TEXT,
-  total_pages INTEGER,
-  page_source TEXT,
-  naver_cached_at INTEGER,
-  aladin_enriched_at INTEGER,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS aladin_daily_usage (
-  day TEXT PRIMARY KEY,
-  call_count INTEGER NOT NULL DEFAULT 0
-);
-`;
-
-let dbSingleton: Database.Database | null = null;
-
-export function catalogDbPath(): string {
-  const fromEnv = process.env.CATALOG_DB_PATH?.trim();
-  if (fromEnv) return fromEnv;
-  // Vercel serverless: only /tmp is writable across invocations in the same region.
-  if (process.env.VERCEL) {
-    return path.join('/tmp', 'booklog-catalog.sqlite');
-  }
-  return path.join(process.cwd(), 'data', 'catalog.sqlite');
-}
-
-export function getCatalogDb(): Database.Database {
-  if (dbSingleton) return dbSingleton;
-  const file = catalogDbPath();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new Database(file);
-  db.pragma('journal_mode = WAL');
-  db.exec(SCHEMA_SQL);
-  dbSingleton = db;
-  return db;
-}
-
-/** Test-only: close and reset singleton. */
-export function resetCatalogDbForTests(): void {
-  if (dbSingleton) {
-    dbSingleton.close();
-    dbSingleton = null;
-  }
-}
+import { ensurePgReady, resetPgForTests } from './db-pg';
+import { getCatalogDb, resetCatalogDbForTests as resetSqliteCatalogDb } from './db-sqlite';
 
 export type CatalogRow = {
   isbn13: string;
@@ -69,3 +15,23 @@ export type CatalogRow = {
   aladin_enriched_at: number | null;
   updated_at: number;
 };
+
+/** Neon Postgres when set; otherwise local SQLite (dev/tests). */
+export function usesPostgresCatalog(): boolean {
+  return Boolean(process.env.DATABASE_URL?.trim());
+}
+
+export async function ensureCatalogReady(): Promise<void> {
+  if (usesPostgresCatalog()) {
+    await ensurePgReady();
+    return;
+  }
+  getCatalogDb();
+}
+
+export function resetCatalogDbForTests(): void {
+  resetPgForTests();
+  resetSqliteCatalogDb();
+}
+
+export { catalogDbPath, isServerlessRuntime } from './db-sqlite';

@@ -4,14 +4,18 @@ export const runtime = 'nodejs';
 
 export async function GET() {
   const day = new Date().toISOString().slice(0, 10);
+  const callCountToday = await getAladinCallCount(day);
   return Response.json({
     ok: true,
     service: 'booklog-api',
     ts: new Date().toISOString(),
+    catalog: {
+      storage: process.env.DATABASE_URL?.trim() ? 'postgres' : 'sqlite',
+    },
     aladin: {
       hasTtbKey: Boolean(process.env.ALADIN_TTB_KEY?.trim()),
-      callCountToday: getAladinCallCount(day),
-      canCallToday: canCallAladin(day),
+      callCountToday,
+      canCallToday: await canCallAladin(day),
     },
   });
 }

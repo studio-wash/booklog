@@ -1,4 +1,6 @@
-import { getCatalogDb } from './db';
+import { ensureCatalogReady, usesPostgresCatalog } from './db';
+import { getCatalogDb } from './db-sqlite';
+import { firstRow, getNeonSql } from './db-pg';
 import { normalizeIsbn13 } from '../isbn';
 
 export type NaverCatalogFields = {
@@ -53,11 +55,37 @@ export function naverItemToCatalogFields(item: Record<string, unknown>): NaverCa
 }
 
 /** Upsert Naver metadata; never overwrite existing total_pages. */
-export function upsertFromNaver(fields: NaverCatalogFields): string | null {
+export async function upsertFromNaver(fields: NaverCatalogFields): Promise<string | null> {
   const isbn13 = normalizeIsbn13(fields.isbnRaw);
   if (!isbn13) return null;
 
   const now = Math.floor(Date.now() / 1000);
+  await ensureCatalogReady();
+
+  if (usesPostgresCatalog()) {
+    const sql = getNeonSql();
+    await sql`
+      INSERT INTO book_catalog (
+        isbn13, title, image_url, author, publisher, pubdate, link,
+        naver_cached_at, updated_at
+      ) VALUES (
+        ${isbn13}, ${fields.title}, ${fields.imageUrl}, ${fields.author},
+        ${fields.publisher}, ${fields.pubdate}, ${fields.link},
+        ${now}, ${now}
+      )
+      ON CONFLICT (isbn13) DO UPDATE SET
+        title = EXCLUDED.title,
+        image_url = EXCLUDED.image_url,
+        author = EXCLUDED.author,
+        publisher = EXCLUDED.publisher,
+        pubdate = EXCLUDED.pubdate,
+        link = EXCLUDED.link,
+        naver_cached_at = EXCLUDED.naver_cached_at,
+        updated_at = EXCLUDED.updated_at
+    `;
+    return isbn13;
+  }
+
   const db = getCatalogDb();
   db.prepare(
     `
@@ -93,7 +121,19 @@ export function upsertFromNaver(fields: NaverCatalogFields): string | null {
   return isbn13;
 }
 
-export function getCatalogTotalPages(isbn13: string): number | null {
+export async function getCatalogTotalPages(isbn13: string): Promise<number | null> {
+  await ensureCatalogReady();
+
+  if (usesPostgresCatalog()) {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT total_pages FROM book_catalog WHERE isbn13 = ${isbn13}
+    `;
+    const totalPages = firstRow<{ total_pages: number | null }>(rows)?.total_pages;
+    if (totalPages == null || totalPages <= 0) return null;
+    return Number(totalPages);
+  }
+
   const row = getCatalogDb()
     .prepare('SELECT total_pages FROM book_catalog WHERE isbn13 = ?')
     .get(isbn13) as { total_pages: number | null } | undefined;
@@ -101,8 +141,27 @@ export function getCatalogTotalPages(isbn13: string): number | null {
   return row.total_pages;
 }
 
-export function setCatalogTotalPagesFromAladin(isbn13: string, totalPages: number): void {
+export async function setCatalogTotalPagesFromAladin(
+  isbn13: string,
+  totalPages: number,
+): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
+  await ensureCatalogReady();
+
+  if (usesPostgresCatalog()) {
+    const sql = getNeonSql();
+    await sql`
+      UPDATE book_catalog
+      SET total_pages = ${totalPages},
+          page_source = 'aladin',
+          aladin_enriched_at = ${now},
+          updated_at = ${now}
+      WHERE isbn13 = ${isbn13}
+        AND (total_pages IS NULL OR total_pages <= 0)
+    `;
+    return;
+  }
+
   getCatalogDb()
     .prepare(
       `
