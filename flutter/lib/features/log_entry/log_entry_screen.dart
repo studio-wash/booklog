@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
+import '../books/books_screen.dart' show showAddBookSheet;
 
 /// Log reading session (Spec FR-2, FR-3, FR-8).
 class LogEntryScreen extends ConsumerStatefulWidget {
@@ -38,6 +39,15 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
   }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  Future<void> _openAddBookSheet() async {
+    final book = await showAddBookSheet(context, ref);
+    if (!mounted || book == null) return;
+    setState(() {
+      _bookId = book.id;
+      _markFinished = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -242,16 +252,28 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
         data: (list) {
           if (list.isEmpty) {
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Add a book first.'),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => context.push('/books'),
-                    child: const Text('Open books'),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Add a book before logging.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _openAddBookSheet,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add new book'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => context.go('/books'),
+                      child: const Text('Open Books shelf'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
@@ -312,6 +334,14 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
                       _bookId = v;
                       _markFinished = false;
                     }),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _openAddBookSheet,
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text('Add new book'),
+                ),
               ),
               const SizedBox(height: 12),
               Builder(

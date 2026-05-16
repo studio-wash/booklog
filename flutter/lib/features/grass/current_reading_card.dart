@@ -177,7 +177,7 @@ class _HomeEmptyReadingPrompt extends ConsumerWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Add a book from the Books tab, then tap + to log your first session.',
+              'Add a book from Books (+), then tap + on Home to log your first session.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,

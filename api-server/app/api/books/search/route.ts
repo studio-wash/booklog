@@ -1,4 +1,8 @@
 import { NextRequest } from 'next/server';
+import { enrichNaverSearchItems } from '@/lib/catalog/enrich';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const NAVER_BOOK = 'https://openapi.naver.com/v1/search/book.json';
 
@@ -69,12 +73,43 @@ export async function GET(request: NextRequest) {
   });
 
   const text = await res.text();
-  const ct = res.headers.get('content-type') ?? 'application/json;charset=utf-8';
-  return new Response(text, {
-    status: res.status,
-    headers: {
-      'Content-Type': ct,
-      ...corsHeaders(),
+  if (!res.ok) {
+    const ct = res.headers.get('content-type') ?? 'application/json;charset=utf-8';
+    return new Response(text, {
+      status: res.status,
+      headers: { 'Content-Type': ct, ...corsHeaders() },
+    });
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return Response.json(
+      { error: 'invalid naver json' },
+      { status: 502, headers: corsHeaders() },
+    );
+  }
+
+  const rawItems = payload.items;
+  const naverItems = Array.isArray(rawItems)
+    ? rawItems.filter((it): it is Record<string, unknown> => it != null && typeof it === 'object')
+    : [];
+
+  const { items, aladinMetrics, aladinCallCount } = await enrichNaverSearchItems(
+    naverItems,
+    display,
+  );
+
+  return Response.json(
+    {
+      ...payload,
+      items,
+      _booklog: {
+        aladinCallCountToday: aladinCallCount,
+        aladinEnrich: aladinMetrics,
+      },
     },
-  });
+    { headers: corsHeaders() },
+  );
 }

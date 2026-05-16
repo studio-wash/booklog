@@ -201,7 +201,7 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
       startingBaseline = bl;
     }
 
-    await db.insertBook(
+    final book = await db.insertBook(
       title: title,
       isbn: isbn,
       imageUrl: imageUrl,
@@ -215,10 +215,7 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
     ref.read(readingDataTickProvider.notifier).state++;
     if (!mounted) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-    });
+    Navigator.of(context).pop(book);
   }
 
   List<Widget> _resultSlivers(ThemeData theme) {
@@ -324,6 +321,16 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (h.totalPages != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${h.totalPages} pages',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
                     if (h.description != null && h.description!.trim().isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
@@ -343,6 +350,8 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                   _titleCtrl.text = h.title;
                   _isbnCtrl.text = h.isbn;
                   _imageUrlCtrl.text = h.imageUrl;
+                  _pagesCtrl.text =
+                      h.totalPages != null ? '${h.totalPages}' : '';
                   _suppressSelectionSync = false;
                   setState(() => _selectedIndex = i);
                 },
@@ -406,9 +415,14 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                     children: [
                       TextField(
                         controller: _pagesCtrl,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Total pages (optional)',
-                          border: OutlineInputBorder(),
+                          helperText:
+                              _selectedIndex >= 0 &&
+                                      _hits[_selectedIndex].totalPages != null
+                                  ? 'Filled from catalog (Aladin Open API). You can change it.'
+                                  : null,
+                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
@@ -481,6 +495,30 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
   }
 }
 
+/// Search-first new book sheet (PLAN-000003). Returns saved [Book] or null if dismissed.
+Future<Book?> showAddBookSheet(BuildContext context, WidgetRef ref) {
+  return showModalBottomSheet<Book?>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      return AnimatedPadding(
+        duration: Duration.zero,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.88,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: _AddBookSheetBody(),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 /// Shelf: list / add / edit / delete books (Spec FR-1).
 class BooksScreen extends ConsumerWidget {
   const BooksScreen({super.key});
@@ -492,7 +530,16 @@ class BooksScreen extends ConsumerWidget {
         MediaQuery.paddingOf(context).bottom + 56 + 32;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Books')),
+      appBar: AppBar(
+        title: const Text('Books'),
+        actions: [
+          IconButton(
+            onPressed: () => showAddBookSheet(context, ref),
+            icon: const Icon(Icons.add),
+            tooltip: 'Add book',
+          ),
+        ],
+      ),
       body: Padding(
         padding: EdgeInsets.only(bottom: shellBottom),
         child: books.when(
@@ -503,7 +550,7 @@ class BooksScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(32),
                 child: BooklogCard(
                   child: Text(
-                    'Add a book with + to start logging.',
+                    'Tap + above to add a book, then log from Home.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -575,33 +622,6 @@ class BooksScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('$e')),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addBook(context, ref),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  Future<void> _addBook(BuildContext context, WidgetRef ref) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return AnimatedPadding(
-          duration: Duration.zero,
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: SizedBox(
-            height: MediaQuery.sizeOf(sheetContext).height * 0.88,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: const _AddBookSheetBody(),
-            ),
-          ),
-        );
-      },
     );
   }
 
