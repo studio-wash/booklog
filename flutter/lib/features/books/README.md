@@ -1,30 +1,27 @@
-# Books (서재)
+# Books feature
 
 **마지막 업데이트**: 2026-05-15
 
 ## Spec 정보
-
-- **Spec 파일**: `spec/features/booklog-mvp/booklog-mvp.md`
-- **Plan 파일**: `plan/PLAN-000001_haruhanjang-mvp/plan.md`, `plan/PLAN-000003_add-book-search-first/plan.md`, `plan/PLAN-000004_dev-db-export-import/plan.md`, `plan/PLAN-000005_resume-reading-from-page/plan.md`, `plan/PLAN-000007_aladin-page-catalog/plan.md`
-- **구현 상태**: ✅ 완료
+- **Spec**: `spec/features/booklog-mvp/booklog-mvp.md` (FR-1, FR-7, FR-12)
+- **Plan**: PLAN-000003, PLAN-000007, **PLAN-000008** (2-step add book)
 
 ## 코드 위치
-
-- **Flutter UI**: `flutter/lib/features/books/books_screen.dart`
-- **책 검색 (FR-7)**: `data/book_search_api.dart`, `data/book_search_hit.dart` (`totalPages`), `domain/isbn.dart`, `books_screen.dart` (pre-fill), `core/api_config.dart`
+- **Flutter**: `flutter/lib/features/books/`
+- **API**: `api-server/app/api/books/`
 
 ## Spec-Code 매핑
 
-| Spec 요구사항 | 코드 파일 | 상태 | 마지막 업데이트 |
-|--------------|-----------|------|----------------|
-| FR-1 책 CRUD | `books_screen.dart`, `AppDatabase` (`lib/data/`) — 기준선 필드 추가·편집(로그 없을 때만) | ✅ | 2026-05-15 |
-| FR-7 외부 도서 검색·선택 | `book_search_hit.dart`, `book_search_api.dart`, `books_screen.dart` — catalog `total_pages` pre-fill, Aladin helper, Naver `description` **미파싱·미표시·DB 미저장** | ✅ | 2026-05-15 |
-| FR-11 백업 화면 진입 | `books_screen.dart` — AppBar zip → `/dev/data` (`DataBackupScreen`) | ✅ | 2026-05-15 |
+| Spec | 코드 |
+|------|------|
+| FR-1 서재 CRUD | `books_screen.dart`, `app_database.dart` |
+| FR-7 검색 피커 (Naver only) | `book_search_picker_screen.dart`, `searchNaverOnly()` |
+| FR-7 추가 폼 + 쪽수 | `add_book_form_screen.dart`, `book_catalog_api.dart` |
+| FR-12 `+` 진입 | `add_book_flow.dart`, `app_router.dart` `/books/add/*` |
 
-## 생성/수정 이력
+## Add book flow (PLAN-000008)
 
-- 2026-05-15: PLAN-000007 — 검색 `total_pages` pre-fill, Aladin attribution helper
-- 2026-05-15: PLAN-000005 — “이미 읽은 마지막 쪽” 추가·편집 시트, 총 페이지 대비 검증
-- 2026-05-15: PLAN-000004 — Books AppBar에서 개발용 백업·복원 화면으로 이동
-- 2026-05-12: PLAN-000001 서재 화면·검색 연동
-- 2026-05-13: PLAN-000003 검색 우선 새 책 추가·`BookSearchHit`·`searchBookHits`
+1. `pushAddBookFlow` → `/books/add/search`
+2. Pick hit → loading overlay → `POST /api/books/catalog/pages` → `/books/add/form` with `AddBookFormArgs`
+3. Form: read-only cover/title/ISBN; edit total pages + read-up-to only (manual entry: title/ISBN + same fields)
+4. Save → `insertBook`, pop with `Book`

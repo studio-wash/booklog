@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { runCatalogEnrichInBackground } from '@/lib/catalog/background';
 import { enrichNaverSearchItemsSafe } from '@/lib/catalog/enrich';
-import { attachCachedTotalPagesOnly } from '@/lib/catalog/enrich-fast';
+import { isCatalogEnrichDisabled } from '@/lib/catalog/search-flags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -100,18 +100,22 @@ export async function GET(request: NextRequest) {
       ? rawItems.filter((it): it is Record<string, unknown> => it != null && typeof it === 'object')
       : [];
 
-    const items = await attachCachedTotalPagesOnly(naverItems);
-
-    runCatalogEnrichInBackground(() =>
-      enrichNaverSearchItemsSafe(naverItems, display).then(() => undefined),
+    const catalogOff = isCatalogEnrichDisabled(
+      request.nextUrl.searchParams.get('catalog'),
     );
+
+    if (!catalogOff) {
+      runCatalogEnrichInBackground(() =>
+        enrichNaverSearchItemsSafe(naverItems, display).then(() => undefined),
+      );
+    }
 
     return Response.json(
       {
         ...payload,
-        items,
+        items: naverItems,
         _booklog: {
-          catalogEnrich: 'background',
+          catalogEnrich: catalogOff ? 'off' : 'background',
         },
       },
       { headers: corsHeaders() },

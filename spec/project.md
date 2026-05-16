@@ -21,3 +21,4 @@
 - **PLAN-000005**: `plan/PLAN-000005_resume-reading-from-page/plan.md` — 앱 등록 전 읽던 마지막 쪽 기준선
 - **PLAN-000006**: `plan/PLAN-000006_reference-image-ui/plan.md` — reference.png UI·하단 네비·홈 집계
 - **PLAN-000007**: `plan/PLAN-000007_aladin-page-catalog/plan.md` — 서버 카탈로그·알라딘 쪽수·검색 pre-fill
+- **PLAN-000008**: `plan/PLAN-000008_add-book-search-picker/plan.md` — 책 추가: Naver 검색 피커 → 폼에서 쪽수 보강

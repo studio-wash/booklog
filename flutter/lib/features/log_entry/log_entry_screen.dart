@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/app_database.dart';
 import '../../providers.dart';
-import '../books/books_screen.dart' show showAddBookSheet;
+import '../books/add_book_flow.dart';
 
 /// Log reading session (Spec FR-2, FR-3, FR-8).
 class LogEntryScreen extends ConsumerStatefulWidget {
@@ -41,7 +41,7 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   Future<void> _openAddBookSheet() async {
-    final book = await showAddBookSheet(context, ref);
+    final book = await pushAddBookFlow(context);
     if (!mounted || book == null) return;
     setState(() {
       _bookId = book.id;

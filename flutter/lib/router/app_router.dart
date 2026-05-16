@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/app_branding.dart';
+import '../features/books/add_book_form_args.dart';
+import '../features/books/add_book_form_screen.dart';
+import '../features/books/book_search_picker_screen.dart';
 import '../features/books/books_screen.dart';
 import '../features/dev/data_backup_screen.dart';
 import '../features/grass/grass_screen.dart';
@@ -66,6 +69,34 @@ GoRouter createAppRouter() {
             ),
           ),
         ],
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/books/add/search',
+        pageBuilder: (context, state) => MaterialPage(
+          key: state.pageKey,
+          child: const BookSearchPickerScreen(),
+        ),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/books/add/form',
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          if (extra is AddBookFormArgs) {
+            return MaterialPage(
+              key: state.pageKey,
+              child: AddBookFormScreen(
+                hit: extra.hit,
+                initialTotalPages: extra.totalPages,
+              ),
+            );
+          }
+          return MaterialPage(
+            key: state.pageKey,
+            child: const AddBookFormScreen(),
+          );
+        },
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,

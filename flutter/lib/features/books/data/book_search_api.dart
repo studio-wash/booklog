@@ -34,8 +34,22 @@ String? _parseSearchErrorHint(String body) {
   return null;
 }
 
+/// Naver-only search for the picker (`catalog=0` — no DB, no background enrich).
+Future<({List<BookSearchHit> hits, String? hint})> searchNaverOnly(
+  String query,
+) async {
+  return _searchBookHits(query, catalogOff: true);
+}
+
 /// Returns parsed [hits] or an error [hint] when the request fails or shape is wrong.
 Future<({List<BookSearchHit> hits, String? hint})> searchBookHits(String query) async {
+  return _searchBookHits(query, catalogOff: false);
+}
+
+Future<({List<BookSearchHit> hits, String? hint})> _searchBookHits(
+  String query, {
+  required bool catalogOff,
+}) async {
   if (!bookSearchEnabled) {
     return (
       hits: <BookSearchHit>[],
@@ -48,8 +62,10 @@ Future<({List<BookSearchHit> hits, String? hint})> searchBookHits(String query) 
   }
   try {
     final baseUri = Uri.parse(_apiBaseUrl.trim());
+    final params = <String, String>{'q': q, 'display': '10'};
+    if (catalogOff) params['catalog'] = '0';
     final uri = baseUri.resolve('api/books/search').replace(
-      queryParameters: {'q': q, 'display': '10'},
+      queryParameters: params,
     );
     final res = await http.get(uri);
     if (res.statusCode != 200) {

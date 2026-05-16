@@ -3,24 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booklog/features/books/data/book_search_hit.dart';
 
 void main() {
-  test('parses total_pages from search JSON', () {
+  test('parses core fields from search JSON', () {
     final hit = BookSearchHit.tryParse({
       'title': 'Test',
       'isbn': '9788936434267',
-      'image': '',
-      'total_pages': 280,
+      'image': 'https://example/cover.jpg',
+      'author': 'Author',
     });
     expect(hit, isNotNull);
-    expect(hit!.totalPages, 280);
-  });
-
-  test('total_pages omitted stays null', () {
-    final hit = BookSearchHit.tryParse({
-      'title': 'Test',
-      'isbn': '9788936434267',
-      'image': '',
-    });
-    expect(hit?.totalPages, isNull);
+    expect(hit!.title, 'Test');
+    expect(hit.author, 'Author');
   });
 
   test('ignores description in API JSON', () {

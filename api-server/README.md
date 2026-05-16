@@ -14,7 +14,8 @@ Next.js proxy for Naver book search + shared ISBN catalog (PLAN-000007).
 
 | Route | 설명 |
 |-------|------|
-| `GET /api/books/search` | Naver search (fast) + cached `total_pages`; catalog upsert + Aladin in **background** |
+| `GET /api/books/search` | Naver search; `?catalog=0` = Naver only (picker); default = background enrich |
+| `POST /api/books/catalog/pages` | Form: upsert meta + read/Aladin 1× for `total_pages` |
 | `GET /api/health` | Health + Aladin daily call summary |
 | `GET /api/dev/aladin-stats` | Aladin daily counter (dev) |
 

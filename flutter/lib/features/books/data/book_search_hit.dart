@@ -11,7 +11,6 @@ class BookSearchHit {
     this.author,
     this.publisher,
     this.pubdate,
-    this.totalPages,
   });
 
   final String title;
@@ -24,21 +23,7 @@ class BookSearchHit {
   final String? publisher;
   final String? pubdate;
 
-  /// From api-server catalog / Aladin enrich (`total_pages` in search JSON).
-  final int? totalPages;
-
   static String _stripHtml(String s) => s.replaceAll(RegExp(r'<[^>]*>'), '');
-
-  static int? _totalPagesField(dynamic v) {
-    if (v == null) return null;
-    if (v is int && v > 0) return v;
-    if (v is num && v > 0) return v.round();
-    if (v is String) {
-      final n = int.tryParse(v.trim());
-      if (n != null && n > 0) return n;
-    }
-    return null;
-  }
 
   static String? _stringField(dynamic v) {
     if (v == null) return null;
@@ -76,7 +61,6 @@ class BookSearchHit {
       author: _stringField(json['author']),
       publisher: _stringField(json['publisher']),
       pubdate: _stringField(json['pubdate']),
-      totalPages: _totalPagesField(json['total_pages']),
     );
   }
 }

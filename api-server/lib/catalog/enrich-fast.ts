@@ -13,8 +13,8 @@ function isbn13FromNaverItem(raw: Record<string, unknown>): string | null {
 }
 
 /**
- * Search response path only: attach cached `total_pages` from catalog (read).
- * No Naver upsert, no Aladin calls — those run in background after the response.
+ * Optional catalog read helper (not used on search response — keep DB off the hot path).
+ * Search returns raw Naver items; upsert + Aladin run in background only.
  */
 export async function attachCachedTotalPagesOnly(
   naverItems: Record<string, unknown>[],

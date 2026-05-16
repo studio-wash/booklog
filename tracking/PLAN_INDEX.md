@@ -7,3 +7,4 @@
 | PLAN-000005 | resume-reading-from-page | 책 등록 시 “이미 읽은 마지막 쪽” 기준선으로 다음 쪽·델타 계산 | 2026-05-15 |
 | PLAN-000006 | reference-image-ui | 참고 이미지 폴더에 두고 UI를 레퍼런스에 맞춰 조정 | 2026-05-15 |
 | PLAN-000007 | aladin-page-catalog | 네이버 검색→서버 카탈로그·알라딘으로 총 페이지 보강·추가 시 기본값 | 2026-05-15 |
+| PLAN-000008 | add-book-search-picker | 책 추가 2단계: Naver 검색·선택 전용 화면 → 폼에서만 쪽수 보강 | 2026-05-15 |
