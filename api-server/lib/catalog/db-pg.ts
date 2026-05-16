@@ -1,12 +1,13 @@
 import { neon } from '@neondatabase/serverless';
+import { getPostgresConnectionUrl } from './database-url';
 
 let sql: ReturnType<typeof neon> | null = null;
 let schemaReady: Promise<void> | null = null;
 
 export function getNeonSql(): ReturnType<typeof neon> {
-  const url = process.env.DATABASE_URL?.trim();
+  const url = getPostgresConnectionUrl();
   if (!url) {
-    throw new Error('DATABASE_URL is required for Postgres catalog storage');
+    throw new Error('DATABASE_URL or POSTGRES_URL is required for Postgres catalog storage');
   }
   if (!sql) sql = neon(url);
   return sql;

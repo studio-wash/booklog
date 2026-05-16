@@ -10,7 +10,6 @@ class BookSearchHit {
     this.link,
     this.author,
     this.publisher,
-    this.description,
     this.pubdate,
     this.totalPages,
   });
@@ -23,7 +22,6 @@ class BookSearchHit {
   final String? link;
   final String? author;
   final String? publisher;
-  final String? description;
   final String? pubdate;
 
   /// From api-server catalog / Aladin enrich (`total_pages` in search JSON).
@@ -68,12 +66,6 @@ class BookSearchHit {
     final isbn = _isbnField(json['isbn']);
     if (isbn.isEmpty) return null;
 
-    final rawDesc = json['description'];
-    final description =
-        rawDesc is String && rawDesc.trim().isNotEmpty
-            ? _stripHtml(rawDesc).trim()
-            : _stringField(rawDesc);
-
     final imageUrl = _stringField(json['image']) ?? '';
 
     return BookSearchHit(
@@ -83,7 +75,6 @@ class BookSearchHit {
       link: _stringField(json['link']),
       author: _stringField(json['author']),
       publisher: _stringField(json['publisher']),
-      description: description,
       pubdate: _stringField(json['pubdate']),
       totalPages: _totalPagesField(json['total_pages']),
     );

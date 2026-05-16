@@ -14,7 +14,7 @@ Next.js proxy for Naver book search + shared ISBN catalog (PLAN-000007).
 
 | Route | 설명 |
 |-------|------|
-| `GET /api/books/search` | Naver search + catalog upsert + lazy Aladin `total_pages` |
+| `GET /api/books/search` | Naver search (fast) + cached `total_pages`; catalog upsert + Aladin in **background** |
 | `GET /api/health` | Health + Aladin daily call summary |
 | `GET /api/dev/aladin-stats` | Aladin daily counter (dev) |
 
@@ -25,10 +25,10 @@ Copy `.env.example` → `.env` (gitignored).
 | Variable | Required | Notes |
 |----------|----------|--------|
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | search | Naver book API |
-| `DATABASE_URL` | Vercel / shared catalog | [Neon](https://neon.tech) Postgres connection string |
+| `DATABASE_URL` or `POSTGRES_URL` | Vercel / shared catalog | [Neon](https://neon.tech) pooled connection string (Vercel integration often sets `POSTGRES_URL` only) |
 | `ALADIN_TTB_KEY` | optional | Aladin `total_pages` enrich |
 
-Without `DATABASE_URL`, catalog uses local SQLite (`data/catalog.sqlite`). On Vercel, set `DATABASE_URL` so catalog survives cold starts.
+Without a Postgres URL, catalog uses local SQLite (`data/catalog.sqlite`). On Vercel, set Neon’s pooled URL so catalog and Aladin daily counters persist across invocations. Search enriches at most **3** Aladin ItemLookUp calls per request (see `lib/catalog/enrich.ts`).
 
 ## Code layout
 

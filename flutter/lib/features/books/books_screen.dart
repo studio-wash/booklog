@@ -331,18 +331,6 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                           ),
                         ),
                       ),
-                    if (h.description != null && h.description!.trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          h.description!.trim(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
                 onTap: () {

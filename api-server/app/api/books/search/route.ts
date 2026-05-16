@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
+import { runCatalogEnrichInBackground } from '@/lib/catalog/background';
 import { enrichNaverSearchItemsSafe } from '@/lib/catalog/enrich';
+import { attachCachedTotalPagesOnly } from '@/lib/catalog/enrich-fast';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,9 +100,10 @@ export async function GET(request: NextRequest) {
       ? rawItems.filter((it): it is Record<string, unknown> => it != null && typeof it === 'object')
       : [];
 
-    const { items, aladinMetrics, aladinCallCount } = await enrichNaverSearchItemsSafe(
-      naverItems,
-      display,
+    const items = await attachCachedTotalPagesOnly(naverItems);
+
+    runCatalogEnrichInBackground(() =>
+      enrichNaverSearchItemsSafe(naverItems, display).then(() => undefined),
     );
 
     return Response.json(
@@ -108,8 +111,7 @@ export async function GET(request: NextRequest) {
         ...payload,
         items,
         _booklog: {
-          aladinCallCountToday: aladinCallCount,
-          aladinEnrich: aladinMetrics,
+          catalogEnrich: 'background',
         },
       },
       { headers: corsHeaders() },

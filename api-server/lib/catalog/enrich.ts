@@ -32,7 +32,8 @@ function naverItemsWithNullPages(naverItems: Record<string, unknown>[]): Record<
 }
 
 /**
- * Naver items → catalog upsert → lazy Aladin page enrich (per-request cap).
+ * Background job: Naver upsert → catalog read → lazy Aladin (per-request cap).
+ * Search route returns before this runs; see enrich-fast.ts for the fast path.
  */
 export async function enrichNaverSearchItems(
   naverItems: Record<string, unknown>[],

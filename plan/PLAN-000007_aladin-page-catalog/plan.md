@@ -29,16 +29,15 @@
     → [api-server] GET /api/books/search
          → Naver book.json (항상)
          → ISBN별 catalog upsert (네이버 메타)
-         → catalog.total_pages 없음 & Aladin 일일 카운트 < 5000
-              → Aladin ItemLookUp(또는 Search) by ISBN → page 저장
-         → JSON items[] (total_pages 포함 가능)
+         → JSON items[] 즉시 반환 (total_pages = 카탈로그 캐시만)
+         → [백그라운드] catalog upsert + (없으면) Aladin ItemLookUp → Neon 저장 (요청당 ≤3)
     → [Flutter] 추가 시트: total_pages 필드 기본값 = 응답값 (수정 가능)
     → [Flutter] insertBook → 기존 books 테이블 (로컬 서재, 변경 없음)
 ```
 
-- **카탈로그 DB**: `api-server` 쪽 **공유 저장소** (SQLite 파일 또는 추후 Postgres). 앱 로컬 DB와 **분리**.
+- **카탈로그 DB**: `api-server` **공유 저장소** — Vercel/프로덕션은 **Neon Postgres** (`DATABASE_URL` / `POSTGRES_URL`), 로컬은 URL 없을 때 SQLite. 앱 로컬 DB와 **분리**.
 - **사용자 서재 `books`**: 읽기 기록·완독·잔디용 로컬 DB 유지. 카탈로그는 “검색·메타 보강” 전용.
-- **설명(description)**: PLAN-000006 정책 유지 — 카탈로그·서재 모두 **본문 설명은 저장하지 않거나 검색 UI 전용**. (네이버 설명은 카탈로그에도 넣지 않음.)
+- **설명(description)**: PLAN-000006 정책 유지 — 카탈로그·서재·**검색 목록 UI** 모두 Naver 본문 설명 **미사용·미표시**. (네이버 JSON에 있어도 Flutter에서 파싱하지 않음.)
 
 ## 핵심 기능
 

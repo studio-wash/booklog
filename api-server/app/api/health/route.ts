@@ -1,4 +1,5 @@
 import { canCallAladin, getAladinCallCount } from '@/lib/aladin/daily-limit';
+import { getPostgresConnectionUrl } from '@/lib/catalog/database-url';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +11,7 @@ export async function GET() {
     service: 'booklog-api',
     ts: new Date().toISOString(),
     catalog: {
-      storage: process.env.DATABASE_URL?.trim() ? 'postgres' : 'sqlite',
+      storage: getPostgresConnectionUrl() ? 'postgres' : 'sqlite',
     },
     aladin: {
       hasTtbKey: Boolean(process.env.ALADIN_TTB_KEY?.trim()),

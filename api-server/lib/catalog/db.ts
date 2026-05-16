@@ -1,3 +1,4 @@
+import { getPostgresConnectionUrl } from './database-url';
 import { ensurePgReady, resetPgForTests } from './db-pg';
 import { getCatalogDb, resetCatalogDbForTests as resetSqliteCatalogDb } from './db-sqlite';
 
@@ -18,7 +19,7 @@ export type CatalogRow = {
 
 /** Neon Postgres when set; otherwise local SQLite (dev/tests). */
 export function usesPostgresCatalog(): boolean {
-  return Boolean(process.env.DATABASE_URL?.trim());
+  return Boolean(getPostgresConnectionUrl());
 }
 
 export async function ensureCatalogReady(): Promise<void> {

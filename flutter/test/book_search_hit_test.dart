@@ -22,4 +22,14 @@ void main() {
     });
     expect(hit?.totalPages, isNull);
   });
+
+  test('ignores description in API JSON', () {
+    final hit = BookSearchHit.tryParse({
+      'title': 'Test',
+      'isbn': '9788936434267',
+      'image': '',
+      'description': 'Long blurb from Naver',
+    });
+    expect(hit, isNotNull);
+  });
 }
