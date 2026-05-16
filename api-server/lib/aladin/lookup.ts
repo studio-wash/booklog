@@ -1,7 +1,7 @@
 // Spec PLAN-000007 / knowledge/reference/api/aladin-openapi.md — ItemLookUp.
 
 const ALADIN_LOOKUP = 'http://www.aladin.co.kr/ttb/api/ItemLookUp.aspx';
-const LOOKUP_TIMEOUT_MS = 8000;
+const LOOKUP_TIMEOUT_MS = 4000;
 
 export function extractItemPageFromAladinJson(data: unknown): number | null {
   if (!data || typeof data !== 'object') return null;

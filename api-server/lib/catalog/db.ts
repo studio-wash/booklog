@@ -29,6 +29,10 @@ let dbSingleton: Database.Database | null = null;
 export function catalogDbPath(): string {
   const fromEnv = process.env.CATALOG_DB_PATH?.trim();
   if (fromEnv) return fromEnv;
+  // Vercel serverless: only /tmp is writable across invocations in the same region.
+  if (process.env.VERCEL) {
+    return path.join('/tmp', 'booklog-catalog.sqlite');
+  }
   return path.join(process.cwd(), 'data', 'catalog.sqlite');
 }
 

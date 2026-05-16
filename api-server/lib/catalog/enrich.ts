@@ -24,6 +24,13 @@ export type EnrichedSearchResult = {
   aladinCallCount: number;
 };
 
+/** Stay within Vercel serverless timeouts (sequential ItemLookUp calls). */
+const MAX_ALADIN_PER_REQUEST = 3;
+
+function naverItemsWithNullPages(naverItems: Record<string, unknown>[]): Record<string, unknown>[] {
+  return naverItems.map((raw) => ({ ...raw, total_pages: null }));
+}
+
 /**
  * Naver items → catalog upsert → lazy Aladin page enrich (per-request cap).
  */
@@ -31,6 +38,7 @@ export async function enrichNaverSearchItems(
   naverItems: Record<string, unknown>[],
   maxAladinAttempts: number,
 ): Promise<EnrichedSearchResult> {
+  const aladinCap = Math.min(maxAladinAttempts, MAX_ALADIN_PER_REQUEST);
   const metrics = createAladinMetrics();
   const ttbKey = process.env.ALADIN_TTB_KEY?.trim() ?? '';
   const hasKey = ttbKey.length > 0;
@@ -58,7 +66,7 @@ export async function enrichNaverSearchItems(
 
     let pages = getCatalogTotalPages(isbn13);
 
-    if (pages == null && hasKey && aladinAttempts < maxAladinAttempts) {
+    if (pages == null && hasKey && aladinAttempts < aladinCap) {
       metrics.attempted += 1;
       aladinAttempts += 1;
 
@@ -88,6 +96,30 @@ export async function enrichNaverSearchItems(
   logAladinMetrics(metrics, day, callCount);
 
   return { items: out, aladinMetrics: metrics, aladinCallCount: callCount };
+}
+
+/**
+ * Safe enrich for serverless: never throws; returns Naver rows on catalog/Aladin failure.
+ */
+export async function enrichNaverSearchItemsSafe(
+  naverItems: Record<string, unknown>[],
+  maxAladinAttempts: number,
+): Promise<EnrichedSearchResult> {
+  try {
+    return await enrichNaverSearchItems(naverItems, maxAladinAttempts);
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: 'enrich_failed',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return {
+      items: naverItemsWithNullPages(naverItems),
+      aladinMetrics: createAladinMetrics(),
+      aladinCallCount: 0,
+    };
+  }
 }
 
 /** Attach total_pages from catalog for a single raw isbn (no Aladin call). */
