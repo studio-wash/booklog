@@ -23,6 +23,7 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
   final _lastPageCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   bool _showNote = false;
+  bool _markFinished = false;
   DateTime _day = DateTime.now();
 
   @override
@@ -124,14 +125,30 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
     }
     final after = await db.maxLastPageReadForBook(bid);
     ref.read(readingDataTickProvider.notifier).state++;
+
+    var bookNow = book;
+    if (_markFinished && !book.isMarkedFinished) {
+      bookNow = book.copyWith(finishedAt: at);
+      await db.updateBook(bookNow);
+      ref.read(readingDataTickProvider.notifier).state++;
+    }
+
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Saved')));
-    if (book.totalPages != null &&
-        before < book.totalPages! &&
-        after >= book.totalPages!) {
-      await _showFinishSheet(context, ref, book, after);
+
+    final showFinishSheet =
+        (_markFinished && !book.isMarkedFinished) ||
+        (!_markFinished &&
+            book.totalPages != null &&
+            book.totalPages! > 0 &&
+            !book.isMarkedFinished &&
+            before < book.totalPages! &&
+            after >= book.totalPages!);
+
+    if (showFinishSheet) {
+      await _showFinishSheet(context, ref, bookNow, lastPage);
     }
     if (context.mounted) context.go('/');
   }
@@ -140,7 +157,7 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
     BuildContext context,
     WidgetRef ref,
     Book book,
-    int totalRead,
+    int pageReached,
   ) async {
     final reviewCtrl = TextEditingController();
     await showModalBottomSheet<void>(
@@ -159,55 +176,61 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Icon(
+                Icons.check_circle_outline,
+                size: 56,
+                color: Theme.of(ctx).colorScheme.primary,
+              ),
+              const SizedBox(height: 12),
               Text(
-                'Finished “${book.title}” 🎉',
-                style: Theme.of(ctx).textTheme.titleMedium,
+                'Congratulations!',
+                textAlign: TextAlign.center,
+                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 8),
-              Text('You reached page $totalRead'),
-              const SizedBox(height: 12),
+              Text(
+                'You finished “${book.title}” (logged through page $pageReached).',
+                textAlign: TextAlign.center,
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
               TextField(
                 controller: reviewCtrl,
                 decoration: const InputDecoration(
                   labelText: 'One-line review (optional)',
+                  hintText: 'What did you think?',
                 ),
-                maxLines: 2,
+                maxLines: 3,
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Close'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () async {
-                        final note = reviewCtrl.text.trim();
-                        await ref
-                            .read(databaseProvider)
-                            .updateBook(
-                              book.copyWith(
-                                completionNote:
-                                    note.isEmpty ? book.completionNote : note,
-                              ),
-                            );
-                        ref.read(readingDataTickProvider.notifier).state++;
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
-                      child: const Text('Save note'),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () async {
+                  final note = reviewCtrl.text.trim();
+                  if (note.isNotEmpty) {
+                    await ref.read(databaseProvider).updateBook(
+                          book.copyWith(completionNote: note),
+                        );
+                    ref.read(readingDataTickProvider.notifier).state++;
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('Save review'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Done without note'),
               ),
             ],
           ),
         );
       },
     );
+    reviewCtrl.dispose();
   }
 
   @override
@@ -284,7 +307,11 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
                           ),
                         )
                         .toList(),
-                onChanged: (v) => setState(() => _bookId = v),
+                onChanged:
+                    (v) => setState(() {
+                      _bookId = v;
+                      _markFinished = false;
+                    }),
               ),
               const SizedBox(height: 12),
               Builder(
@@ -297,22 +324,58 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
                     }
                   }
                   final bl = sel?.startingLastPageRead;
-                  return TextField(
-                    controller: _lastPageCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Last page you read',
-                      hintText: 'e.g. 42',
-                      helperText:
-                          bl != null
-                              ? 'You set prior progress through page $bl — '
-                                    'enter at least ${bl + 1} unless a timeline '
-                                    'log requires more. Must fit earlier/later '
-                                    'logs for this book.'
-                              : 'Page you stopped on. For a past day, it must '
-                                    'fit between earlier and later logs for this '
-                                    'book on the timeline.',
-                    ),
-                    keyboardType: TextInputType.number,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _lastPageCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Last page you read',
+                          hintText: 'e.g. 280',
+                          helperText:
+                              bl != null
+                                  ? 'You set prior progress through page $bl — '
+                                        'enter at least ${bl + 1} unless a timeline '
+                                        'log requires more. Must fit earlier/later '
+                                        'logs for this book.'
+                                  : 'Page you stopped on. For a past day, it must '
+                                        'fit between earlier and later logs for this '
+                                        'book on the timeline.',
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      if (sel != null) ...[
+                        const SizedBox(height: 12),
+                        if (sel.totalPages != null && sel.totalPages! > 0)
+                          Text(
+                            'Listed length: ${sel.totalPages} pages',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        if (sel.isMarkedFinished)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              Icons.check_circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            title: const Text('Already marked finished'),
+                          )
+                        else
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: _markFinished,
+                            onChanged:
+                                (v) => setState(() => _markFinished = v ?? false),
+                            title: const Text('I’ve finished reading this book'),
+                          ),
+                      ],
+                    ],
                   );
                 },
               ),

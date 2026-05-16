@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/app_theme.dart';
 import 'data/app_database.dart';
 import 'providers.dart';
 
@@ -59,10 +60,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
     }
     if (_db == null) {
       return MaterialApp(
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-          useMaterial3: true,
-        ),
+        theme: buildBooklogLightTheme(),
         home: const Scaffold(
           body: SafeArea(
             child: Center(

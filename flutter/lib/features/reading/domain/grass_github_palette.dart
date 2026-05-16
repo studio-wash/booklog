@@ -29,5 +29,5 @@ Color githubGrassDayNumberColor(int level) {
   return const Color(0xFF57606A);
 }
 
-/// Strong border for “today” (same palette as grass; no accent color circle).
-Color get githubGrassTodayBorder => const Color(0xFF1B5E20);
+/// Strong border for “today” on the heatmap (neutral — UI accent is not green).
+Color get githubGrassTodayBorder => const Color(0xFF24292F);

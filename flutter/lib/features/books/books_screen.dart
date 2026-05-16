@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
+import '../../core/booklog_ui.dart';
 import '../../data/app_database.dart';
 import '../../providers.dart';
 import 'data/book_search_api.dart';
@@ -140,7 +139,6 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
     String? link;
     String? author;
     String? publisher;
-    String? description;
     String? pubdate;
 
     if (_selectedIndex >= 0 && _selectedIndex < _hits.length) {
@@ -151,7 +149,6 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
       link = h.link;
       author = h.author;
       publisher = h.publisher;
-      description = h.description;
       pubdate = h.pubdate;
     } else {
       title = _titleCtrl.text.trim();
@@ -211,7 +208,6 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
       link: link,
       author: author,
       publisher: publisher,
-      description: description,
       pubdate: pubdate,
       totalPages: tp,
       startingLastPageRead: startingBaseline,
@@ -316,14 +312,31 @@ class _AddBookSheetBodyState extends ConsumerState<_AddBookSheetBody> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  [
-                    if (h.author != null && h.author!.isNotEmpty) h.author!,
-                    if (h.publisher != null && h.publisher!.isNotEmpty)
-                      h.publisher!,
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      [
+                        if (h.author != null && h.author!.isNotEmpty) h.author!,
+                        if (h.publisher != null && h.publisher!.isNotEmpty)
+                          h.publisher!,
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (h.description != null && h.description!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          h.description!.trim(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 onTap: () {
                   _suppressSelectionSync = true;
@@ -475,58 +488,92 @@ class BooksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final books = ref.watch(booksProvider);
+    final shellBottom =
+        MediaQuery.paddingOf(context).bottom + 56 + 32;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Books'),
-        actions: [
-          IconButton(
-            tooltip: 'Backup & restore (dev)',
-            icon: const Icon(Icons.folder_zip_outlined),
-            onPressed: () => context.push('/dev/data'),
-          ),
-        ],
-      ),
-      body: books.when(
+      appBar: AppBar(title: const Text('Books')),
+      body: Padding(
+        padding: EdgeInsets.only(bottom: shellBottom),
+        child: books.when(
         data: (list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Text('Add a book with + to start logging.'),
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: BooklogCard(
+                  child: Text(
+                    'Add a book with + to start logging.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ),
             );
           }
-          return ListView.separated(
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             itemCount: list.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final b = list[i];
               final theme = Theme.of(context);
-              return ListTile(
-                leading: SizedBox(
-                  width: 48,
-                  height: 56,
-                  child: _shelfThumb(b, theme),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: BooklogCard(
+                  onTap: () => _editBook(context, ref, b),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        height: 64,
+                        child: _shelfThumb(b, theme),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              b.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              [
+                                if (b.author != null && b.author!.isNotEmpty)
+                                  b.author!,
+                                if (b.totalPages != null)
+                                  '${b.totalPages} pages',
+                              ].where((s) => s.isNotEmpty).join(' · '),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () async {
+                          await ref.read(databaseProvider).deleteBook(b.id);
+                          ref.read(readingDataTickProvider.notifier).state++;
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                title: Text(b.title),
-                subtitle: Text(
-                  [
-                    b.isbn,
-                    if (b.totalPages != null) '${b.totalPages} pages',
-                  ].join(' · '),
-                ),
-                isThreeLine: false,
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () async {
-                    await ref.read(databaseProvider).deleteBook(b.id);
-                    ref.read(readingDataTickProvider.notifier).state++;
-                  },
-                ),
-                onTap: () => _editBook(context, ref, b),
               );
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addBook(context, ref),
@@ -570,7 +617,6 @@ class BooksScreen extends ConsumerWidget {
     final authorCtrl = TextEditingController(text: b.author ?? '');
     final publisherCtrl = TextEditingController(text: b.publisher ?? '');
     final pubdateCtrl = TextEditingController(text: b.pubdate ?? '');
-    final descriptionCtrl = TextEditingController(text: b.description ?? '');
     final pagesCtrl = TextEditingController(
       text: b.totalPages?.toString() ?? '',
     );
@@ -656,17 +702,6 @@ class BooksScreen extends ConsumerWidget {
                             labelText: 'Pub. date (API string)',
                             border: OutlineInputBorder(),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: descriptionCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Description',
-                            border: OutlineInputBorder(),
-                            alignLabelWithHint: true,
-                          ),
-                          minLines: 2,
-                          maxLines: 6,
                         ),
                         const SizedBox(height: 8),
                         TextField(
@@ -767,11 +802,12 @@ class BooksScreen extends ConsumerWidget {
                             link: emptyToNull(linkCtrl.text),
                             author: emptyToNull(authorCtrl.text),
                             publisher: emptyToNull(publisherCtrl.text),
-                            description: emptyToNull(descriptionCtrl.text),
+                            description: null,
                             pubdate: emptyToNull(pubdateCtrl.text),
                             totalPages: tp,
                             completionNote: b.completionNote,
                             startingLastPageRead: startingBaseline,
+                            finishedAt: b.finishedAt,
                             createdAt: b.createdAt,
                           ),
                         );
@@ -793,7 +829,6 @@ class BooksScreen extends ConsumerWidget {
       authorCtrl.dispose();
       publisherCtrl.dispose();
       pubdateCtrl.dispose();
-      descriptionCtrl.dispose();
       pagesCtrl.dispose();
       baselineCtrl.dispose();
     });

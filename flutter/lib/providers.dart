@@ -99,6 +99,19 @@ class CurrentReadingSnapshot {
   final DateTime lastLogCalendarDate;
 }
 
+/// Home streak — consecutive days with logs (PLAN-000006).
+final readingStreakProvider = FutureProvider.autoDispose<int>((ref) async {
+  ref.watch(readingDataTickProvider);
+  return ref.watch(databaseProvider).readingStreakDays();
+});
+
+/// Books with ≥1 log in the current calendar year (PLAN-000006).
+final booksReadThisYearProvider = FutureProvider.autoDispose<int>((ref) async {
+  ref.watch(readingDataTickProvider);
+  final year = DateTime.now().year;
+  return ref.watch(databaseProvider).distinctBooksWithLogsInYear(year);
+});
+
 /// Null when there are no reading entries (or book row missing).
 final currentReadingProvider =
     FutureProvider.autoDispose<CurrentReadingSnapshot?>((ref) async {

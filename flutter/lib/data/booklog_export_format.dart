@@ -17,7 +17,7 @@ const String kExportKeyReadingEntries = 'reading_entries';
 const String kBooklogExportExampleJson = '''
 {
   "export_schema_version": 1,
-  "app_schema_version": 3,
+  "app_schema_version": 4,
   "exported_at": "2026-05-15T12:00:00.000Z",
   "books": [
     {
@@ -33,6 +33,7 @@ const String kBooklogExportExampleJson = '''
       "total_pages": 300,
       "completion_note": null,
       "starting_last_page_read": null,
+      "finished_at": null,
       "created_at": 1715769600000
     }
   ],

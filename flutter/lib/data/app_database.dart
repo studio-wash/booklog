@@ -25,6 +25,7 @@ class Book {
     this.totalPages,
     this.completionNote,
     this.startingLastPageRead,
+    this.finishedAt,
     required this.createdAt,
   });
 
@@ -35,6 +36,7 @@ class Book {
   final String? link;
   final String? author;
   final String? publisher;
+  /// Legacy column; new books do not persist Naver blurb (search UI only).
   final String? description;
   final String? pubdate;
   final int? totalPages;
@@ -42,7 +44,11 @@ class Book {
   /// Pages already read before the first in-app log (PLAN-000005). Inclusive
   /// “last page reached” outside the app; first log must be `> this` (or null).
   final int? startingLastPageRead;
+  /// User marked the book finished (FR-8); independent of [totalPages] / last log.
+  final DateTime? finishedAt;
   final DateTime createdAt;
+
+  bool get isMarkedFinished => finishedAt != null;
 
   static Book fromMap(Map<String, Object?> m) => Book(
     id: m['id']! as int,
@@ -57,6 +63,10 @@ class Book {
     totalPages: m['total_pages'] as int?,
     completionNote: m['completion_note'] as String?,
     startingLastPageRead: m['starting_last_page_read'] as int?,
+    finishedAt:
+        m['finished_at'] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(m['finished_at']! as int),
     createdAt: DateTime.fromMillisecondsSinceEpoch(m['created_at']! as int),
   );
 
@@ -73,6 +83,7 @@ class Book {
     int? totalPages,
     String? completionNote,
     int? startingLastPageRead,
+    DateTime? finishedAt,
     DateTime? createdAt,
   }) {
     return Book(
@@ -89,6 +100,7 @@ class Book {
       completionNote: completionNote ?? this.completionNote,
       startingLastPageRead:
           startingLastPageRead ?? this.startingLastPageRead,
+      finishedAt: finishedAt ?? this.finishedAt,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -139,9 +151,9 @@ class AppDatabase {
 
   final Database _db;
 
-  /// v2: full Naver catalog fields. v3: `starting_last_page_read` on books
-  /// (PLAN-000005). v1 → v2 **drops** books and reading_entries.
-  static const int _schemaVersion = 3;
+  /// v2: full Naver catalog fields. v3: `starting_last_page_read`. v4:
+  /// `finished_at` (FR-8 manual finish). v1 → v2 **drops** books and entries.
+  static const int _schemaVersion = 4;
 
   /// Same as SQLite `userVersion` — used in JSON export (`app_schema_version`).
   static int get booklogDbSchemaVersion => _schemaVersion;
@@ -168,6 +180,11 @@ class AppDatabase {
             'ALTER TABLE books ADD COLUMN starting_last_page_read INTEGER',
           );
         }
+        if (oldVersion < 4) {
+          await db.execute(
+            'ALTER TABLE books ADD COLUMN finished_at INTEGER',
+          );
+        }
       },
     );
     return AppDatabase._(db);
@@ -188,6 +205,7 @@ CREATE TABLE books (
   total_pages INTEGER,
   completion_note TEXT,
   starting_last_page_read INTEGER,
+  finished_at INTEGER,
   created_at INTEGER NOT NULL,
   UNIQUE (isbn)
 );
@@ -304,6 +322,7 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
         'total_pages': book.totalPages,
         'completion_note': book.completionNote,
         'starting_last_page_read': book.startingLastPageRead,
+        'finished_at': book.finishedAt?.millisecondsSinceEpoch,
       },
       where: 'id = ?',
       whereArgs: [book.id],
@@ -373,6 +392,42 @@ ORDER BY COALESCE(e.last_read, b.created_at) DESC;
     );
     if (rows.isEmpty) return null;
     return ReadingEntry.fromMap(rows.single);
+  }
+
+  /// Consecutive calendar days with ≥1 log, ending today or yesterday if today
+  /// has no log yet (PLAN-000006 home streak).
+  Future<int> readingStreakDays() async {
+    final rows = await _db.rawQuery(
+      'SELECT DISTINCT calendar_date FROM reading_entries',
+    );
+    if (rows.isEmpty) return 0;
+    final logged = {for (final r in rows) r['calendar_date']! as String};
+    var d = DateTime.now();
+    d = DateTime(d.year, d.month, d.day);
+    if (!logged.contains(_dateKey(d))) {
+      d = d.subtract(const Duration(days: 1));
+    }
+    var streak = 0;
+    while (logged.contains(_dateKey(d))) {
+      streak++;
+      d = d.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  /// Distinct books with at least one log in [year] (calendar `calendar_date`).
+  Future<int> distinctBooksWithLogsInYear(int year) async {
+    final rows = await _db.rawQuery(
+      '''
+SELECT COUNT(DISTINCT book_id) AS c
+FROM reading_entries
+WHERE calendar_date LIKE ?
+''',
+      ['$year-%'],
+    );
+    final c = rows.single['c'];
+    if (c is int) return c;
+    return (c as num?)?.toInt() ?? 0;
   }
 
   Future<Book?> bookById(int id) async {
@@ -766,6 +821,8 @@ WHERE book_id = ? AND (
           row['starting_last_page_read'] == null
               ? null
               : _numInt(row['starting_last_page_read']),
+      'finished_at':
+          row['finished_at'] == null ? null : _numInt(row['finished_at']),
       'created_at': _numInt(row['created_at']),
     };
   }

@@ -18,7 +18,7 @@
 |--------------|-----------|------|----------------|
 | FR-2 날짜·책·페이지 저장 | `log_entry_screen.dart` — `_save`, `insertEntry`, `lastPageBoundsForNewEntry`; 기준선 힌트; 날짜는 **오늘 이전만**; `initialLogDay`·`/log?day=` | ✅ | 2026-05-15 |
 | FR-3 접힘 감상 | `log_entry_screen.dart` — `_showNote`, `TextField` | ✅ | 2026-05-12 |
-| FR-8 완독 축하·한줄 평 | `log_entry_screen.dart` — `maxLastPageReadForBook`(기준선 포함) vs `totalPages` 바텀시트 | ✅ | 2026-05-15 |
+| FR-8 완독 축하·한줄 평 | `log_entry_screen.dart` — **「다 읽음」 체크** → `finished_at`; 로그 쪽수는 입력값 기준. 총 페이지 도달 시에도 축하 시트 가능 | ✅ | 2026-05-15 |
 
 ## 생성/수정 이력
 

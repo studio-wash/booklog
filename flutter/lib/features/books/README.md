@@ -18,7 +18,7 @@
 | Spec 요구사항 | 코드 파일 | 상태 | 마지막 업데이트 |
 |--------------|-----------|------|----------------|
 | FR-1 책 CRUD | `books_screen.dart`, `AppDatabase` (`lib/data/`) — 기준선 필드 추가·편집(로그 없을 때만) | ✅ | 2026-05-15 |
-| FR-7 외부 도서 검색·선택 | `book_search_hit.dart`, `book_search_api.dart`, `books_screen.dart` — 검색 우선 시트·썸네일 목록·수동 입력 접기 | ✅ | 2026-05-13 |
+| FR-7 외부 도서 검색·선택 | `book_search_hit.dart`, `book_search_api.dart`, `books_screen.dart` — 검색 시 설명 2줄 표시·**DB 미저장** | ✅ | 2026-05-15 |
 | FR-11 백업 화면 진입 | `books_screen.dart` — AppBar zip → `/dev/data` (`DataBackupScreen`) | ✅ | 2026-05-15 |
 
 ## 생성/수정 이력
