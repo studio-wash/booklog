@@ -39,36 +39,54 @@ GoRouter createAppRouter() {
         routes: [
           GoRoute(
             path: '/',
-            builder: (context, state) => const GrassScreen(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const GrassScreen(),
+            ),
           ),
           GoRoute(
             path: '/history',
-            builder: (context, state) => const HistoryPlaceholderScreen(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const HistoryPlaceholderScreen(),
+            ),
           ),
           GoRoute(
             path: '/books',
-            builder: (context, state) => const BooksScreen(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const BooksScreen(),
+            ),
           ),
           GoRoute(
             path: '/profile',
-            builder: (context, state) => const ProfileScreen(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const ProfileScreen(),
+            ),
           ),
         ],
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,
         path: '/log',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final raw = state.uri.queryParameters['bookId'];
           final id = raw != null ? int.tryParse(raw) : null;
           final day = _parseLocalDayQuery(state.uri.queryParameters['day']);
-          return LogEntryScreen(initialBookId: id, initialLogDay: day);
+          return MaterialPage(
+            key: state.pageKey,
+            child: LogEntryScreen(initialBookId: id, initialLogDay: day),
+          );
         },
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,
         path: '/dev/data',
-        builder: (context, state) => const DataBackupScreen(),
+        pageBuilder: (context, state) => MaterialPage(
+          key: state.pageKey,
+          child: const DataBackupScreen(),
+        ),
       ),
     ],
     errorBuilder:

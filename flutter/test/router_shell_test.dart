@@ -45,4 +45,30 @@ void main() {
 
     expect(find.text('Books'), findsWidgets);
   });
+
+  testWidgets('push log then pop does not assert on duplicate page keys', (
+    tester,
+  ) async {
+    final db = await AppDatabase.open(pathOverride: inMemoryDatabasePath);
+    addTearDown(db.close);
+
+    final router = createAppRouter();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    router.push('/log');
+    await tester.pumpAndSettle();
+    expect(find.text('Log reading'), findsOneWidget);
+
+    router.pop();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BooklogShellScaffold), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

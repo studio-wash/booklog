@@ -160,7 +160,13 @@ class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
     if (showFinishSheet) {
       await _showFinishSheet(context, ref, bookNow, lastPage);
     }
-    if (context.mounted) context.go('/');
+    if (!context.mounted) return;
+    // Opened via push from shell — pop avoids duplicating shell `/` page keys.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
   }
 
   Future<void> _showFinishSheet(
