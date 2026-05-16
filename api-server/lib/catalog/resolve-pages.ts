@@ -3,9 +3,11 @@ import { lookupItemPageByIsbn13 } from '../aladin/lookup';
 import { normalizeIsbn13 } from '../isbn';
 import {
   getCatalogTotalPages,
+  markAladinLookupAttempted,
   naverItemToCatalogFields,
   setCatalogTotalPagesFromAladin,
   upsertFromNaver,
+  wasAladinLookupAttempted,
   type NaverCatalogFields,
 } from './upsert';
 
@@ -53,16 +55,22 @@ export async function resolveCatalogTotalPages(
     return { isbn13, total_pages: pages };
   }
 
+  if (await wasAladinLookupAttempted(isbn13)) {
+    return { isbn13, total_pages: null };
+  }
+
   const ttbKey = process.env.ALADIN_TTB_KEY?.trim() ?? '';
   if (!ttbKey || !(await canCallAladin())) {
     return { isbn13, total_pages: null };
   }
 
   const lookedUp = await lookupItemPageByIsbn13(isbn13, ttbKey);
+  await incrementAladinCallCount();
   if (lookedUp != null) {
     await setCatalogTotalPagesFromAladin(isbn13, lookedUp);
-    await incrementAladinCallCount();
     pages = lookedUp;
+  } else {
+    await markAladinLookupAttempted(isbn13);
   }
 
   return { isbn13, total_pages: pages };

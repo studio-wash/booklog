@@ -6,8 +6,10 @@ import { after, before, describe, it } from 'node:test';
 import { resetCatalogDbForTests, usesPostgresCatalog } from './db';
 import {
   getCatalogTotalPages,
+  markAladinLookupAttempted,
   setCatalogTotalPagesFromAladin,
   upsertFromNaver,
+  wasAladinLookupAttempted,
 } from './upsert';
 import { ALADIN_DAILY_LIMIT, canCallAladin, incrementAladinCallCount } from './daily-limit';
 
@@ -47,6 +49,23 @@ describe('catalog upsert', () => {
 
     await upsertFromNaver({ ...fields, title: 'Updated Title' });
     assert.equal(await getCatalogTotalPages(isbn13!), 320);
+  });
+
+  it('marks aladin miss so lookup is not retried', async () => {
+    const isbn = '9791198809834';
+    await upsertFromNaver({
+      isbnRaw: isbn,
+      title: '전쟁과 평화의 별',
+      imageUrl: '',
+      author: null,
+      publisher: null,
+      pubdate: null,
+      link: null,
+    });
+    assert.equal(await wasAladinLookupAttempted(isbn), false);
+    await markAladinLookupAttempted(isbn);
+    assert.equal(await wasAladinLookupAttempted(isbn), true);
+    assert.equal(await getCatalogTotalPages(isbn), null);
   });
 });
 

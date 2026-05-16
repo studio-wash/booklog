@@ -13,9 +13,11 @@ import { lookupItemPageByIsbn13 } from '../aladin/lookup';
 import { normalizeIsbn13 } from '../isbn';
 import {
   getCatalogTotalPages,
+  markAladinLookupAttempted,
   naverItemToCatalogFields,
   setCatalogTotalPagesFromAladin,
   upsertFromNaver,
+  wasAladinLookupAttempted,
 } from './upsert';
 
 export type EnrichedSearchResult = {
@@ -68,20 +70,25 @@ export async function enrichNaverSearchItems(
     let pages = await getCatalogTotalPages(isbn13);
 
     if (pages == null && hasKey && aladinAttempts < aladinCap) {
-      metrics.attempted += 1;
-      aladinAttempts += 1;
-
-      if (!(await canCallAladin())) {
-        recordAladinSkip(metrics, 'limit');
+      if (await wasAladinLookupAttempted(isbn13)) {
+        recordAladinSkip(metrics, 'no_match');
       } else {
-        const lookedUp = await lookupItemPageByIsbn13(isbn13, ttbKey);
-        if (lookedUp != null) {
-          await setCatalogTotalPagesFromAladin(isbn13, lookedUp);
-          await incrementAladinCallCount();
-          pages = lookedUp;
-          metrics.enriched += 1;
+        metrics.attempted += 1;
+        aladinAttempts += 1;
+
+        if (!(await canCallAladin())) {
+          recordAladinSkip(metrics, 'limit');
         } else {
-          recordAladinSkip(metrics, 'no_match');
+          const lookedUp = await lookupItemPageByIsbn13(isbn13, ttbKey);
+          await incrementAladinCallCount();
+          if (lookedUp != null) {
+            await setCatalogTotalPagesFromAladin(isbn13, lookedUp);
+            pages = lookedUp;
+            metrics.enriched += 1;
+          } else {
+            await markAladinLookupAttempted(isbn13);
+            recordAladinSkip(metrics, 'no_match');
+          }
         }
       }
     } else if (pages == null && !hasKey) {

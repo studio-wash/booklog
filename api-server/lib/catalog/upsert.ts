@@ -141,6 +141,58 @@ export async function getCatalogTotalPages(isbn13: string): Promise<number | nul
   return row.total_pages;
 }
 
+/** True when Aladin ItemLookUp already ran (hit or miss). */
+export async function wasAladinLookupAttempted(isbn13: string): Promise<boolean> {
+  await ensureCatalogReady();
+
+  if (usesPostgresCatalog()) {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT aladin_enriched_at FROM book_catalog WHERE isbn13 = ${isbn13}
+    `;
+    const at = firstRow<{ aladin_enriched_at: number | null }>(rows)?.aladin_enriched_at;
+    return at != null && at > 0;
+  }
+
+  const row = getCatalogDb()
+    .prepare('SELECT aladin_enriched_at FROM book_catalog WHERE isbn13 = ?')
+    .get(isbn13) as { aladin_enriched_at: number | null } | undefined;
+  return row?.aladin_enriched_at != null && row.aladin_enriched_at > 0;
+}
+
+/** Record Aladin miss so we do not call ItemLookUp again for this ISBN. */
+export async function markAladinLookupAttempted(isbn13: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  await ensureCatalogReady();
+
+  if (usesPostgresCatalog()) {
+    const sql = getNeonSql();
+    await sql`
+      UPDATE book_catalog
+      SET aladin_enriched_at = ${now},
+          updated_at = ${now}
+      WHERE isbn13 = ${isbn13}
+        AND aladin_enriched_at IS NULL
+    `;
+    return;
+  }
+
+  getCatalogDb()
+    .prepare(
+      `
+      UPDATE book_catalog
+      SET aladin_enriched_at = @aladin_enriched_at,
+          updated_at = @updated_at
+      WHERE isbn13 = @isbn13 AND aladin_enriched_at IS NULL
+      `,
+    )
+    .run({
+      isbn13,
+      aladin_enriched_at: now,
+      updated_at: now,
+    });
+}
+
 export async function setCatalogTotalPagesFromAladin(
   isbn13: string,
   totalPages: number,

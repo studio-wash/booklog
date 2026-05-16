@@ -31,6 +31,8 @@ Copy `.env.example` → `.env` (gitignored).
 
 Without a Postgres URL, catalog uses local SQLite (`data/catalog.sqlite`). On Vercel, set Neon’s pooled URL so catalog and Aladin daily counters persist across invocations. Search enriches at most **3** Aladin ItemLookUp calls per request (see `lib/catalog/enrich.ts`).
 
+**Function region**: `vercel.json` sets `"regions": ["icn1"]` (Seoul) so API routes run near Naver/Aladin instead of the default `iad1` (Washington). Redeploy after changing. Hobby: one region only; Pro can use multiple.
+
 ## Code layout
 
 | Path | Role |
